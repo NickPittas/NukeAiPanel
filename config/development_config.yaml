@@ -1,0 +1,375 @@
+# Development Configuration for Nuke AI Panel
+# This configuration is optimized for development and testing
+# Copy to ~/.nuke_ai_panel/config.yaml for development work
+
+version: "1.0"
+
+# AI Provider configurations for development
+providers:
+  # OpenAI Configuration
+  openai:
+    name: "openai"
+    enabled: true
+    default_model: "gpt-3.5-turbo"  # Cheaper model for development
+    max_retries: 2  # Fewer retries for faster feedback
+    timeout: 15  # Shorter timeout for development
+    rate_limit: 100  # Higher rate limit for testing
+    extra_headers: {}
+    model_overrides:
+      "test": "gpt-3.5-turbo"
+      "debug": "gpt-3.5-turbo"
+    
+    # Development-specific settings
+    cost_tracking: true
+    daily_cost_limit: 20.0  # Lower limit for development
+    warn_on_expensive_models: false  # Don't warn during development
+
+  # Anthropic Configuration
+  anthropic:
+    name: "anthropic"
+    enabled: true
+    default_model: "claude-3-haiku-20240307"  # Faster, cheaper model
+    max_retries: 2
+    timeout: 15
+    rate_limit: 100
+    extra_headers: {}
+    model_overrides:
+      "test": "claude-3-haiku-20240307"
+      "debug": "claude-3-haiku-20240307"
+    
+    cost_tracking: true
+    daily_cost_limit: 20.0
+    warn_on_expensive_models: false
+
+  # Google AI Configuration
+  google:
+    name: "google"
+    enabled: true  # Enabled for testing
+    default_model: "gemini-pro"
+    max_retries: 2
+    timeout: 15
+    rate_limit: 100
+    extra_headers: {}
+    model_overrides: {}
+
+  # OpenRouter Configuration
+  openrouter:
+    name: "openrouter"
+    enabled: true  # Enabled for testing multiple models
+    default_model: "openai/gpt-3.5-turbo"
+    max_retries: 2
+    timeout: 15
+    rate_limit: 100
+    custom_endpoint: "https://openrouter.ai/api/v1"
+    extra_headers:
+      HTTP-Referer: "http://localhost:8080/nuke-ai-panel-dev"
+      X-Title: "Nuke AI Panel Development"
+    model_overrides: {}
+
+  # Ollama Configuration (Local AI for development)
+  ollama:
+    name: "ollama"
+    enabled: true  # Great for offline development
+    default_model: "llama2"
+    max_retries: 1  # Local, so fewer retries needed
+    timeout: 60  # Reasonable timeout for local models
+    rate_limit: null  # No rate limit for local
+    custom_endpoint: "http://localhost:11434"
+    extra_headers: {}
+    model_overrides:
+      "fast": "llama2:7b"
+      "quality": "llama2:13b"
+
+  # Mistral Configuration
+  mistral:
+    name: "mistral"
+    enabled: true  # Enabled for testing
+    default_model: "mistral-small"  # Smaller model for development
+    max_retries: 2
+    timeout: 15
+    rate_limit: 100
+    extra_headers: {}
+    model_overrides: {}
+
+# Development caching configuration
+cache:
+  enabled: true
+  max_size: 500  # Smaller cache for development
+  ttl_seconds: 1800  # 30 minutes cache TTL
+  cache_dir: null  # Uses default: ~/.nuke_ai_panel/cache
+  
+  # Development cache settings
+  encrypt_cache: false  # Disabled for easier debugging
+  compress_cache: false  # Disabled for easier inspection
+  cache_cleanup_interval: 1800  # Clean up every 30 minutes
+  max_cache_size_mb: 100  # Smaller cache size
+
+# Development logging configuration
+logging:
+  level: "DEBUG"  # Verbose logging for development
+  file_logging: true
+  console_logging: true  # Enable console logging for development
+  log_file: "nuke_ai_panel_dev.log"  # Separate dev log file
+  max_file_size: 10485760  # 10MB
+  backup_count: 3  # Fewer backup files
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s"
+  
+  # Development logging settings
+  log_rotation: true
+  compress_old_logs: false  # Don't compress for easier access
+  sanitize_logs: false  # Don't sanitize for debugging
+  audit_logging: false  # Disabled for development
+  
+  # Debug-specific logging
+  log_api_requests: true
+  log_api_responses: true
+  log_cache_operations: true
+  log_performance_metrics: true
+
+# Development security configuration
+security:
+  encrypt_cache: false  # Disabled for easier debugging
+  encrypt_logs: false
+  api_key_rotation_days: 365  # Less frequent rotation in development
+  max_failed_auth_attempts: 10  # More lenient for development
+  session_timeout_minutes: 120  # Longer session timeout
+  
+  # Relaxed security for development
+  require_https: false  # Allow HTTP for local development
+  validate_ssl_certificates: false  # Allow self-signed certs
+  enable_request_signing: false
+  audit_api_calls: false
+  
+  # No IP restrictions in development
+  allowed_ip_ranges: []
+  blocked_ip_ranges: []
+
+# Development UI configuration
+ui:
+  theme: "dark"
+  font_size: 12
+  auto_save: true
+  show_token_usage: true
+  max_history_items: 50  # Smaller history for development
+  
+  # Development UI settings
+  show_cost_tracking: true
+  show_performance_metrics: true  # Show metrics for debugging
+  enable_shortcuts: true
+  confirm_expensive_operations: false  # Don't confirm in development
+  
+  # Debug UI features
+  show_debug_panel: true
+  show_api_logs: true
+  show_cache_stats: true
+  enable_mock_responses: true
+
+# Development performance settings
+performance:
+  # Connection settings
+  connection_pool_size: 5  # Smaller pool for development
+  connection_timeout: 15
+  read_timeout: 30
+  keep_alive_timeout: 15
+  
+  # Retry settings
+  retry_exponential_base: 1.5  # Faster retries for development
+  retry_max_delay: 30.0  # Shorter max delay
+  retry_jitter: false  # Disable jitter for predictable timing
+  
+  # Concurrency settings
+  async_batch_size: 3  # Smaller batches for easier debugging
+  max_concurrent_requests: 2  # Limit for easier debugging
+  request_queue_size: 10
+  
+  # Model selection preferences
+  prefer_streaming_models: true  # Enable streaming for testing
+  prefer_function_calling_models: true  # Test function calling
+  fallback_to_cheaper_models: true
+  
+  # Performance monitoring
+  enable_metrics_collection: true
+  metrics_retention_days: 7  # Shorter retention
+  performance_alerts: false  # Disabled for development
+
+# Development cost optimization
+cost_optimization:
+  enable_cost_tracking: true
+  daily_cost_limit: 50.0  # Development daily limit
+  monthly_cost_limit: 500.0  # Development monthly limit
+  warn_on_expensive_models: false  # Don't warn during development
+  auto_switch_to_cheaper_models: false  # Don't auto-switch for testing
+  
+  # Cost thresholds
+  expensive_model_threshold: 0.05  # Higher threshold for development
+  bulk_operation_threshold: 5.0
+  
+  # Cost reporting
+  generate_cost_reports: false  # Disabled for development
+  cost_report_recipients: []
+  cost_alert_threshold: 0.9  # Higher threshold
+
+# Development monitoring and alerting
+monitoring:
+  enable_health_checks: true
+  health_check_interval: 60  # More frequent checks for development
+  
+  # Performance monitoring
+  track_response_times: true
+  track_error_rates: true
+  track_usage_patterns: true
+  
+  # Alerting disabled for development
+  enable_alerts: false
+  alert_channels: []
+  
+  # Alert thresholds (not used but defined)
+  high_error_rate_threshold: 0.5  # Higher threshold
+  slow_response_threshold: 30.0  # Higher threshold
+  high_usage_threshold: 10000  # Higher threshold
+
+# Development backup and recovery
+backup:
+  enable_automatic_backup: false  # Disabled for development
+  backup_interval_hours: 168  # Weekly if enabled
+  backup_retention_days: 7
+  backup_location: null
+  
+  # What to backup
+  backup_sessions: false
+  backup_cache: false
+  backup_logs: false
+  backup_config: true  # Only backup config
+  
+  # Backup encryption
+  encrypt_backups: false
+  backup_compression: false
+
+# Development integration settings
+development_integration:
+  # Hot reload settings
+  enable_hot_reload: true
+  watch_config_changes: true
+  auto_restart_on_code_changes: false
+  
+  # Mock services
+  enable_mock_providers: true
+  mock_response_delay: 0.5  # Simulate network delay
+  
+  # Testing helpers
+  enable_test_endpoints: true
+  enable_debug_endpoints: true
+  
+  # Development tools
+  enable_profiling: true
+  enable_memory_tracking: true
+  enable_request_logging: true
+
+# Development environment variables
+environment:
+  # Required environment variables
+  required_env_vars:
+    - "NUKE_AI_PANEL_ENV"  # Should be set to "development"
+  
+  # Optional environment variables
+  optional_env_vars:
+    - "DEV_USER_NAME"
+    - "DEV_PROJECT_NAME"
+    - "DEBUG_LEVEL"
+
+# Feature flags for development
+feature_flags:
+  enable_experimental_features: true  # Enable all experimental features
+  enable_beta_features: true
+  enable_debug_features: true
+  
+  # Specific features
+  enable_streaming_responses: true
+  enable_function_calling: true
+  enable_image_analysis: true  # Enable for testing
+  enable_code_generation: true
+  enable_batch_processing: true
+  
+  # Development-only features
+  enable_mock_responses: true
+  enable_response_caching: true
+  enable_request_replay: true
+  enable_performance_profiling: true
+
+# Development testing settings
+testing:
+  # Test data
+  use_test_data: true
+  test_data_path: "./test_data"
+  
+  # Mock settings
+  mock_ai_responses: false  # Set to true to use mock responses
+  mock_response_file: "./test_data/mock_responses.json"
+  
+  # Test automation
+  enable_automated_tests: true
+  test_coverage_reporting: true
+  
+  # Load testing
+  enable_load_testing: false
+  max_test_requests: 100
+
+# Development debugging settings
+debugging:
+  # Debug modes
+  enable_debug_mode: true
+  verbose_error_messages: true
+  include_stack_traces: true
+  
+  # Request/Response debugging
+  log_full_requests: true
+  log_full_responses: true
+  log_headers: true
+  
+  # Performance debugging
+  enable_timing_logs: true
+  enable_memory_profiling: false  # Can be resource intensive
+  enable_cpu_profiling: false
+  
+  # Debug tools
+  enable_debug_console: true
+  enable_interactive_debugger: false  # Use with caution
+
+# Development deployment settings
+deployment:
+  environment: "development"
+  deployment_id: "dev-local"
+  deployment_timestamp: null
+  
+  # Development server settings
+  auto_reload: true
+  debug_mode: true
+  
+  # Health checks
+  health_check_enabled: true
+  metrics_endpoint_enabled: true
+  
+  # Development-specific endpoints
+  debug_endpoints_enabled: true
+  test_endpoints_enabled: true
+
+# Custom development settings
+custom:
+  developer_name: "Developer"
+  development_machine: true
+  
+  # Development shortcuts
+  quick_test_mode: true
+  skip_confirmations: true
+  auto_clear_cache: false
+  
+  # Development integrations
+  ide_integration: true
+  git_integration: true
+  
+  # Custom development workflows
+  custom_test_workflows: {}
+  development_templates: {}
+  
+  # Personal development settings
+  personal_preferences: {}

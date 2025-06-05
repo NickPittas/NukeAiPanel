@@ -1,0 +1,177 @@
+# VFX Quality Rules and Best Practices
+# Industry-standard guidelines for professional compositing
+
+workflow_organization:
+  node_naming:
+    rule: "Use descriptive names for all nodes"
+    examples:
+      - "BG_Plate_v01 instead of Read1"
+      - "Hero_ColorCorrect instead of ColorCorrect3"
+      - "Final_Comp instead of Merge2_7"
+    violations:
+      - "Default node names (Read1, Merge2, etc.)"
+      - "Cryptic abbreviations"
+      - "Numbers without context"
+    severity: "warning"
+
+  node_layout:
+    rule: "Organize nodes in logical, readable flow"
+    examples:
+      - "Left-to-right flow for main pipeline"
+      - "Vertical branches for variations"
+      - "Grouped related operations"
+    violations:
+      - "Crossing connections"
+      - "Random node placement"
+      - "Unclear data flow"
+    severity: "info"
+
+performance_optimization:
+  bbox_settings:
+    rule: "Use appropriate bounding box settings"
+    examples:
+      - "Set bbox to 'B' input for Merge operations"
+      - "Use 'intersection' for operations that don't expand"
+      - "Crop early in the pipeline"
+    violations:
+      - "Union bbox on all operations"
+      - "Processing full format when unnecessary"
+      - "Late cropping in pipeline"
+    severity: "warning"
+
+  proxy_usage:
+    rule: "Use proxy modes for interactive work"
+    examples:
+      - "Set proxy scale to 1/2 or 1/4 for complex comps"
+      - "Use proxy files for heavy source material"
+      - "Switch to full resolution for final review"
+    violations:
+      - "Working at full resolution unnecessarily"
+      - "No proxy setup for heavy comps"
+      - "Forgetting to switch back to full res"
+    severity: "info"
+
+color_management:
+  color_spaces:
+    rule: "Maintain correct color spaces throughout pipeline"
+    examples:
+      - "Set correct color space on Read nodes"
+      - "Work in linear for compositing operations"
+      - "Convert to display space only for viewing"
+    violations:
+      - "Incorrect color space settings"
+      - "Missing color space conversions"
+      - "Working in display space for compositing"
+    severity: "error"
+
+  alpha_handling:
+    rule: "Handle alpha channels correctly"
+    examples:
+      - "Use Premult for CG elements"
+      - "Unpremult before color operations"
+      - "Check alpha in viewer regularly"
+    violations:
+      - "Ignoring premultiplication state"
+      - "Color correcting premultiplied images"
+      - "Black edges from incorrect alpha handling"
+    severity: "error"
+
+quality_standards:
+  edge_quality:
+    rule: "Maintain high-quality edges throughout pipeline"
+    examples:
+      - "Use appropriate filtering on Transform nodes"
+      - "Preserve motion blur in keying operations"
+      - "Avoid over-processing edges"
+    violations:
+      - "Aliased edges from poor filtering"
+      - "Lost detail from over-processing"
+      - "Inconsistent edge treatment"
+    severity: "warning"
+
+  frame_consistency:
+    rule: "Maintain consistent frame ranges"
+    examples:
+      - "Set project frame range first"
+      - "Verify all Read nodes have correct ranges"
+      - "Handle frame offsets explicitly"
+    violations:
+      - "Mismatched frame ranges"
+      - "Missing frames in sequences"
+      - "Incorrect frame rate settings"
+    severity: "error"
+
+keying_standards:
+  keying_workflow:
+    rule: "Follow established keying workflow"
+    examples:
+      - "Start with conservative key"
+      - "Refine edges separately"
+      - "Handle spill suppression properly"
+    violations:
+      - "Aggressive initial keying"
+      - "Ignoring edge treatment"
+      - "No spill suppression"
+    severity: "warning"
+
+  edge_treatment:
+    rule: "Proper edge treatment for keys"
+    examples:
+      - "Use erosion/dilation for edge cleanup"
+      - "Apply appropriate blur for edge softness"
+      - "Preserve fine detail like hair"
+    violations:
+      - "Hard, aliased key edges"
+      - "Over-processed edges losing detail"
+      - "Inconsistent edge quality"
+    severity: "warning"
+
+technical_standards:
+  version_control:
+    rule: "Maintain proper version control"
+    examples:
+      - "Save incremental versions regularly"
+      - "Use descriptive version comments"
+      - "Backup to multiple locations"
+    violations:
+      - "Overwriting previous versions"
+      - "No backup strategy"
+      - "Unclear version naming"
+    severity: "warning"
+
+  memory_management:
+    rule: "Monitor and optimize memory usage"
+    examples:
+      - "Use appropriate cache settings"
+      - "Limit concurrent processing"
+      - "Monitor memory usage during renders"
+    violations:
+      - "Excessive memory usage"
+      - "Memory leaks from poor caching"
+      - "Running out of memory during renders"
+    severity: "warning"
+
+collaboration:
+  documentation:
+    rule: "Document complex workflows and decisions"
+    examples:
+      - "Add notes to complex node setups"
+      - "Document version changes"
+      - "Explain non-standard approaches"
+    violations:
+      - "No documentation for complex setups"
+      - "Unclear decision rationale"
+      - "Missing handover information"
+    severity: "info"
+
+  file_organization:
+    rule: "Organize project files logically"
+    examples:
+      - "Use consistent folder structure"
+      - "Separate source, work, and output files"
+      - "Use descriptive file names"
+    violations:
+      - "Disorganized file structure"
+      - "Mixed file types in same folder"
+      - "Unclear file naming"
+    severity: "info"

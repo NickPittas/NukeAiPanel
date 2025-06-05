@@ -1,0 +1,495 @@
+# Studio Configuration for Nuke AI Panel
+# Multi-user studio environment configuration
+# Deploy to shared location: /etc/nuke_ai_panel/config.yaml or similar
+
+version: "1.0"
+
+# Studio information
+studio:
+  name: "VFX Studio Name"
+  department: "Compositing"
+  location: "Studio Location"
+  timezone: "UTC"
+  
+  # Studio-wide settings
+  max_concurrent_users: 50
+  user_session_timeout: 60  # minutes
+  shared_cache_enabled: true
+  centralized_logging: true
+
+# AI Provider configurations for studio environment
+providers:
+  # OpenAI Configuration - Studio Account
+  openai:
+    name: "openai"
+    enabled: true
+    default_model: "gpt-4"
+    max_retries: 3
+    timeout: 30
+    rate_limit: 30  # Per user rate limit
+    extra_headers: {}
+    model_overrides:
+      "junior": "gpt-3.5-turbo"  # Cost-effective for junior artists
+      "senior": "gpt-4"          # Full model for senior artists
+      "lead": "gpt-4"            # Full model for leads
+      "supervisor": "gpt-4"      # Full model for supervisors
+    
+    # Studio cost management
+    cost_tracking: true
+    daily_cost_limit: 500.0  # Studio daily limit
+    monthly_cost_limit: 10000.0  # Studio monthly limit
+    warn_on_expensive_models: true
+    
+    # User-based limits
+    user_daily_limits:
+      "junior": 10.0
+      "senior": 25.0
+      "lead": 50.0
+      "supervisor": 100.0
+      "admin": 200.0
+
+  # Anthropic Configuration - Studio Account
+  anthropic:
+    name: "anthropic"
+    enabled: true
+    default_model: "claude-3-sonnet-20240229"
+    max_retries: 3
+    timeout: 30
+    rate_limit: 30
+    extra_headers: {}
+    model_overrides:
+      "junior": "claude-3-haiku-20240307"
+      "senior": "claude-3-sonnet-20240229"
+      "lead": "claude-3-sonnet-20240229"
+      "supervisor": "claude-3-opus-20240229"
+    
+    cost_tracking: true
+    daily_cost_limit: 500.0
+    monthly_cost_limit: 10000.0
+    warn_on_expensive_models: true
+    
+    user_daily_limits:
+      "junior": 10.0
+      "senior": 25.0
+      "lead": 50.0
+      "supervisor": 100.0
+      "admin": 200.0
+
+  # Google AI Configuration
+  google:
+    name: "google"
+    enabled: false  # Disabled by default in studio
+    default_model: "gemini-pro"
+    max_retries: 3
+    timeout: 30
+    rate_limit: 30
+    extra_headers: {}
+    model_overrides: {}
+
+  # OpenRouter Configuration - For model diversity
+  openrouter:
+    name: "openrouter"
+    enabled: true
+    default_model: "openai/gpt-4"
+    max_retries: 3
+    timeout: 30
+    rate_limit: 30
+    custom_endpoint: "https://openrouter.ai/api/v1"
+    extra_headers:
+      HTTP-Referer: "https://studio.com/nuke-ai-panel"
+      X-Title: "Studio Nuke AI Panel"
+    model_overrides: {}
+
+  # Ollama Configuration - Studio Local Inference Server
+  ollama:
+    name: "ollama"
+    enabled: true  # Enable for cost savings and privacy
+    default_model: "llama2"
+    max_retries: 2
+    timeout: 120
+    rate_limit: null  # No rate limit for local
+    custom_endpoint: "http://studio-ai-server:11434"  # Studio AI server
+    extra_headers: {}
+    model_overrides:
+      "fast": "llama2:7b"
+      "balanced": "llama2:13b"
+      "quality": "llama2:70b"
+
+  # Mistral Configuration
+  mistral:
+    name: "mistral"
+    enabled: false  # Optional for studio
+    default_model: "mistral-medium"
+    max_retries: 3
+    timeout: 30
+    rate_limit: 30
+    extra_headers: {}
+    model_overrides: {}
+
+# Studio caching configuration
+cache:
+  enabled: true
+  max_size: 5000  # Large shared cache
+  ttl_seconds: 14400  # 4 hours cache TTL
+  cache_dir: "/shared/nuke_ai_panel/cache"  # Shared cache location
+  
+  # Studio cache settings
+  encrypt_cache: true
+  compress_cache: true
+  cache_cleanup_interval: 1800  # Clean up every 30 minutes
+  max_cache_size_mb: 2000  # 2GB shared cache
+  
+  # Multi-user cache settings
+  shared_cache: true
+  cache_per_user: false
+  cache_isolation_level: "project"  # Isolate by project
+  
+  # Cache distribution
+  distributed_cache: false  # Enable if using multiple servers
+  cache_replication: false
+
+# Studio logging configuration
+logging:
+  level: "INFO"
+  file_logging: true
+  console_logging: false
+  log_file: "/shared/nuke_ai_panel/logs/nuke_ai_panel.log"
+  max_file_size: 104857600  # 100MB
+  backup_count: 20  # Keep more backups in studio
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(user)s - %(project)s - %(message)s"
+  
+  # Studio logging settings
+  log_rotation: true
+  compress_old_logs: true
+  sanitize_logs: true
+  audit_logging: true
+  
+  # Centralized logging
+  centralized_logging: true
+  log_server: "studio-log-server:514"  # Syslog server
+  
+  # User activity logging
+  log_user_actions: true
+  log_api_usage: true
+  log_cost_tracking: true
+
+# Studio security configuration
+security:
+  encrypt_cache: true
+  encrypt_logs: true
+  api_key_rotation_days: 30  # Frequent rotation in studio
+  max_failed_auth_attempts: 3
+  session_timeout_minutes: 60
+  
+  # Studio security settings
+  require_https: true
+  validate_ssl_certificates: true
+  enable_request_signing: true
+  audit_api_calls: true
+  
+  # Network security
+  allowed_ip_ranges:
+    - "10.0.0.0/8"      # Studio internal network
+    - "192.168.0.0/16"  # Studio VPN
+  blocked_ip_ranges: []
+  
+  # User authentication
+  require_user_authentication: true
+  ldap_integration: true
+  ldap_server: "ldap://studio-ldap:389"
+  
+  # Role-based access control
+  enable_rbac: true
+  default_user_role: "junior"
+
+# Studio user management
+user_management:
+  # User roles and permissions
+  roles:
+    junior:
+      daily_cost_limit: 10.0
+      allowed_models: ["gpt-3.5-turbo", "claude-3-haiku-20240307", "llama2"]
+      max_concurrent_requests: 2
+      can_use_expensive_models: false
+      
+    senior:
+      daily_cost_limit: 25.0
+      allowed_models: ["gpt-4", "claude-3-sonnet-20240229", "llama2"]
+      max_concurrent_requests: 3
+      can_use_expensive_models: true
+      
+    lead:
+      daily_cost_limit: 50.0
+      allowed_models: ["gpt-4", "claude-3-sonnet-20240229", "claude-3-opus-20240229"]
+      max_concurrent_requests: 5
+      can_use_expensive_models: true
+      can_manage_team_settings: true
+      
+    supervisor:
+      daily_cost_limit: 100.0
+      allowed_models: ["*"]  # All models
+      max_concurrent_requests: 10
+      can_use_expensive_models: true
+      can_manage_team_settings: true
+      can_view_team_usage: true
+      
+    admin:
+      daily_cost_limit: 500.0
+      allowed_models: ["*"]
+      max_concurrent_requests: 20
+      can_use_expensive_models: true
+      can_manage_all_settings: true
+      can_view_all_usage: true
+      can_manage_users: true
+  
+  # User provisioning
+  auto_provision_users: true
+  default_role: "junior"
+  user_approval_required: false
+  
+  # User directories
+  user_home_template: "/home/{username}/.nuke_ai_panel"
+  shared_templates_dir: "/shared/nuke_ai_panel/templates"
+
+# Studio UI configuration
+ui:
+  theme: "studio"  # Custom studio theme
+  font_size: 11
+  auto_save: true
+  show_token_usage: true
+  max_history_items: 100
+  
+  # Studio UI settings
+  show_cost_tracking: true
+  show_performance_metrics: false  # Hide from regular users
+  enable_shortcuts: true
+  confirm_expensive_operations: true
+  
+  # Multi-user UI features
+  show_user_info: true
+  show_project_info: true
+  show_team_usage: true  # For leads and above
+  enable_user_switching: false  # Disable for security
+  
+  # Studio branding
+  studio_logo: "/shared/nuke_ai_panel/assets/studio_logo.png"
+  custom_css: "/shared/nuke_ai_panel/assets/studio_theme.css"
+
+# Studio performance settings
+performance:
+  # Connection settings optimized for studio network
+  connection_pool_size: 50  # Large pool for many users
+  connection_timeout: 30
+  read_timeout: 60
+  keep_alive_timeout: 60
+  
+  # Retry settings
+  retry_exponential_base: 2.0
+  retry_max_delay: 120.0
+  retry_jitter: true
+  
+  # Concurrency settings
+  async_batch_size: 10
+  max_concurrent_requests: 5  # Per user
+  request_queue_size: 100
+  
+  # Load balancing
+  enable_load_balancing: true
+  load_balancer_algorithm: "round_robin"
+  
+  # Performance monitoring
+  enable_metrics_collection: true
+  metrics_retention_days: 90
+  performance_alerts: true
+
+# Studio cost management
+cost_management:
+  enable_cost_tracking: true
+  
+  # Studio-wide limits
+  daily_cost_limit: 1000.0
+  monthly_cost_limit: 20000.0
+  quarterly_cost_limit: 50000.0
+  
+  # Department limits
+  department_limits:
+    "compositing": 15000.0  # Monthly
+    "lighting": 10000.0
+    "fx": 12000.0
+    "rnd": 8000.0
+  
+  # Project limits
+  project_cost_tracking: true
+  project_cost_allocation: true
+  
+  # Cost optimization
+  auto_switch_to_cheaper_models: true
+  bulk_discount_threshold: 1000.0
+  
+  # Cost reporting
+  generate_cost_reports: true
+  cost_report_schedule: "weekly"
+  cost_report_recipients:
+    - "vfx-supervisor@studio.com"
+    - "finance@studio.com"
+    - "it-admin@studio.com"
+
+# Studio monitoring and alerting
+monitoring:
+  enable_health_checks: true
+  health_check_interval: 60  # 1 minute
+  
+  # Performance monitoring
+  track_response_times: true
+  track_error_rates: true
+  track_usage_patterns: true
+  track_cost_patterns: true
+  
+  # Alerting
+  enable_alerts: true
+  alert_channels:
+    - type: "email"
+      recipients: ["it-admin@studio.com"]
+    - type: "slack"
+      webhook: "https://hooks.slack.com/services/..."
+  
+  # Alert thresholds
+  high_error_rate_threshold: 0.05  # 5%
+  slow_response_threshold: 5.0  # 5 seconds
+  high_usage_threshold: 500  # Requests per hour
+  cost_alert_threshold: 0.8  # 80% of limit
+
+# Studio backup and disaster recovery
+backup:
+  enable_automatic_backup: true
+  backup_interval_hours: 6  # Every 6 hours
+  backup_retention_days: 90
+  backup_location: "/backup/nuke_ai_panel"
+  
+  # What to backup
+  backup_sessions: true
+  backup_cache: false  # Too large for regular backup
+  backup_logs: true
+  backup_config: true
+  backup_user_data: true
+  
+  # Backup security
+  encrypt_backups: true
+  backup_compression: true
+  
+  # Disaster recovery
+  enable_disaster_recovery: true
+  dr_site_location: "/dr/nuke_ai_panel"
+  dr_sync_interval: 24  # hours
+
+# Studio integration
+studio_integration:
+  # Pipeline integration
+  enable_pipeline_hooks: true
+  pipeline_config_path: "/shared/pipeline/nuke_ai_panel_hooks.py"
+  
+  # Asset management integration
+  integrate_with_asset_manager: true
+  asset_manager_type: "shotgun"  # or "ftrack", "custom"
+  asset_manager_config:
+    server: "https://studio.shotgunstudio.com"
+    script_name: "nuke_ai_panel"
+    api_key: "${SHOTGUN_API_KEY}"
+  
+  # Render farm integration
+  enable_render_farm_integration: true
+  render_farm_type: "deadline"  # or "tractor", "custom"
+  render_farm_config:
+    server: "deadline-server:8080"
+    
+  # Version control integration
+  enable_version_control: true
+  version_control_type: "perforce"  # or "git", "custom"
+  version_control_config:
+    server: "perforce-server:1666"
+    
+  # Project management integration
+  project_management_type: "shotgun"
+  project_management_config:
+    server: "https://studio.shotgunstudio.com"
+
+# Studio compliance and governance
+compliance:
+  # Data governance
+  data_retention_days: 365
+  auto_delete_old_data: true
+  data_classification: "internal"
+  
+  # Privacy and security
+  anonymize_user_data: false
+  log_user_actions: true
+  enable_audit_trail: true
+  audit_retention_days: 2555  # 7 years
+  
+  # Compliance reporting
+  generate_compliance_reports: true
+  compliance_report_schedule: "monthly"
+  compliance_officer: "compliance@studio.com"
+  
+  # Industry standards
+  follow_mpaa_guidelines: true
+  follow_gdpr_requirements: false  # Set based on location
+  follow_hipaa_requirements: false
+
+# Studio deployment configuration
+deployment:
+  environment: "studio"
+  deployment_type: "multi_server"  # or "single_server", "cloud"
+  
+  # Server configuration
+  primary_server: "nuke-ai-01.studio.local"
+  backup_servers:
+    - "nuke-ai-02.studio.local"
+    - "nuke-ai-03.studio.local"
+  
+  # Load balancer
+  load_balancer: "nuke-ai-lb.studio.local"
+  
+  # Database
+  database_type: "postgresql"  # or "mysql", "sqlite"
+  database_server: "db-server.studio.local"
+  database_name: "nuke_ai_panel"
+  
+  # Health checks
+  health_check_enabled: true
+  metrics_endpoint_enabled: true
+  
+  # High availability
+  enable_high_availability: true
+  failover_timeout: 30  # seconds
+
+# Custom studio settings
+custom:
+  # Studio-specific workflows
+  custom_workflows:
+    "glow_effect": "/shared/nuke_ai_panel/workflows/glow_effect.yaml"
+    "color_correction": "/shared/nuke_ai_panel/workflows/color_correction.yaml"
+    "compositing_setup": "/shared/nuke_ai_panel/workflows/compositing_setup.yaml"
+  
+  # Studio templates
+  custom_templates:
+    "shot_setup": "/shared/nuke_ai_panel/templates/shot_setup.nk"
+    "comp_template": "/shared/nuke_ai_panel/templates/comp_template.nk"
+  
+  # Studio-specific providers
+  custom_providers: {}
+  
+  # Department-specific settings
+  department_configs:
+    "compositing":
+      default_models: ["gpt-4", "claude-3-sonnet-20240229"]
+      specialized_workflows: ["compositing_setup", "color_correction"]
+    "lighting":
+      default_models: ["gpt-3.5-turbo", "claude-3-haiku-20240307"]
+      specialized_workflows: ["lighting_setup"]
+    "fx":
+      default_models: ["gpt-4", "claude-3-opus-20240229"]
+      specialized_workflows: ["fx_setup", "simulation_help"]
+  
+  # Project-specific overrides
+  project_overrides: {}

@@ -1,0 +1,184 @@
+{
+  "templates": [
+    {
+      "template_id": "motion_blur_comp",
+      "name": "Motion Blur Composite",
+      "category": "compositing",
+      "node_sequence": ["Read", "VectorBlur", "Merge2", "Write"],
+      "default_parameters": {
+        "Read": {
+          "file": "",
+          "channels": "rgba"
+        },
+        "VectorBlur": {
+          "uv": "motion",
+          "scale": 1.0,
+          "soft_lines": true
+        },
+        "Merge2": {
+          "operation": "over",
+          "mix": 1.0
+        },
+        "Write": {
+          "file": "",
+          "file_type": "exr"
+        }
+      },
+      "connection_pattern": [
+        [0, 1, 0],
+        [1, 2, 1],
+        [2, 3, 0]
+      ],
+      "customization_points": [
+        "Motion vector source",
+        "Blur scale amount",
+        "Output format"
+      ]
+    },
+    {
+      "template_id": "edge_extend",
+      "name": "Edge Extension Setup",
+      "category": "utility",
+      "node_sequence": ["Read", "EdgeExtend", "Blur", "Merge2"],
+      "default_parameters": {
+        "Read": {
+          "file": "",
+          "channels": "rgba"
+        },
+        "EdgeExtend": {
+          "edge_mode": "stretch",
+          "iterations": 10
+        },
+        "Blur": {
+          "size": 2.0,
+          "filter": "gaussian"
+        },
+        "Merge2": {
+          "operation": "under",
+          "mix": 1.0
+        }
+      },
+      "connection_pattern": [
+        [0, 1, 0],
+        [1, 2, 0],
+        [0, 3, 0],
+        [2, 3, 1]
+      ],
+      "customization_points": [
+        "Edge extension method",
+        "Number of iterations",
+        "Blur amount"
+      ]
+    },
+    {
+      "template_id": "despill_setup",
+      "name": "Green Screen Despill",
+      "category": "keying",
+      "node_sequence": ["Read", "HueCorrect", "ColorCorrect", "Merge2"],
+      "default_parameters": {
+        "Read": {
+          "file": "",
+          "channels": "rgba"
+        },
+        "HueCorrect": {
+          "saturation": 0.0,
+          "hue_range": "green",
+          "falloff": 0.2
+        },
+        "ColorCorrect": {
+          "saturation": 1.1,
+          "gamma": [1.0, 1.0, 1.0, 1.0]
+        },
+        "Merge2": {
+          "operation": "over",
+          "mix": 1.0
+        }
+      },
+      "connection_pattern": [
+        [0, 1, 0],
+        [1, 2, 0],
+        [2, 3, 0]
+      ],
+      "customization_points": [
+        "Despill strength",
+        "Hue range selection",
+        "Saturation compensation"
+      ]
+    },
+    {
+      "template_id": "light_wrap",
+      "name": "Light Wrap Effect",
+      "category": "effects",
+      "node_sequence": ["Read", "Dilate", "Blur", "Grade", "Merge2"],
+      "default_parameters": {
+        "Read": {
+          "file": "",
+          "channels": "rgba"
+        },
+        "Dilate": {
+          "size": 5.0,
+          "filter": "gaussian"
+        },
+        "Blur": {
+          "size": 10.0,
+          "filter": "gaussian"
+        },
+        "Grade": {
+          "multiply": [2.0, 2.0, 2.0, 1.0],
+          "gamma": [0.5, 0.5, 0.5, 1.0]
+        },
+        "Merge2": {
+          "operation": "plus",
+          "mix": 0.3
+        }
+      },
+      "connection_pattern": [
+        [0, 1, 0],
+        [1, 2, 0],
+        [2, 3, 0],
+        [0, 4, 0],
+        [3, 4, 1]
+      ],
+      "customization_points": [
+        "Wrap size",
+        "Blur amount",
+        "Intensity",
+        "Color temperature"
+      ]
+    },
+    {
+      "template_id": "depth_comp",
+      "name": "Depth-based Composite",
+      "category": "cg_integration",
+      "node_sequence": ["Read", "Read", "ZMerge", "Grade", "Write"],
+      "default_parameters": {
+        "Read": {
+          "file": "",
+          "channels": "rgba"
+        },
+        "ZMerge": {
+          "operation": "depth",
+          "mix": 1.0
+        },
+        "Grade": {
+          "multiply": [1.0, 1.0, 1.0, 1.0]
+        },
+        "Write": {
+          "file": "",
+          "file_type": "exr"
+        }
+      },
+      "connection_pattern": [
+        [0, 2, 0],
+        [1, 2, 1],
+        [2, 3, 0],
+        [3, 4, 0]
+      ],
+      "customization_points": [
+        "Depth channel source",
+        "Z-merge operation",
+        "Final color grading"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,324 @@
+# Production Configuration for Nuke AI Panel
+# This configuration is optimized for production VFX environments
+# Copy to ~/.nuke_ai_panel/config.yaml and customize as needed
+
+version: "1.0"
+
+# AI Provider configurations for production
+providers:
+  # OpenAI Configuration
+  openai:
+    name: "openai"
+    enabled: true
+    default_model: "gpt-4"
+    max_retries: 3
+    timeout: 30
+    rate_limit: 50  # Conservative rate limit for production
+    extra_headers: {}
+    model_overrides:
+      # Use cost-effective models for simple queries
+      "simple": "gpt-3.5-turbo"
+      "complex": "gpt-4"
+    
+    # Production-specific settings
+    cost_tracking: true
+    daily_cost_limit: 100.0  # USD per day
+    warn_on_expensive_models: true
+
+  # Anthropic Configuration
+  anthropic:
+    name: "anthropic"
+    enabled: true
+    default_model: "claude-3-sonnet-20240229"
+    max_retries: 3
+    timeout: 30
+    rate_limit: 50
+    extra_headers: {}
+    model_overrides:
+      "simple": "claude-3-haiku-20240307"
+      "complex": "claude-3-opus-20240229"
+    
+    cost_tracking: true
+    daily_cost_limit: 100.0
+    warn_on_expensive_models: true
+
+  # Google AI Configuration
+  google:
+    name: "google"
+    enabled: false  # Disabled by default in production
+    default_model: "gemini-pro"
+    max_retries: 3
+    timeout: 30
+    rate_limit: 60
+    extra_headers: {}
+    model_overrides: {}
+
+  # OpenRouter Configuration
+  openrouter:
+    name: "openrouter"
+    enabled: false  # Optional for production
+    default_model: "openai/gpt-4"
+    max_retries: 3
+    timeout: 30
+    rate_limit: 50
+    custom_endpoint: "https://openrouter.ai/api/v1"
+    extra_headers:
+      HTTP-Referer: "https://your-studio.com/nuke-ai-panel"
+      X-Title: "Studio Nuke AI Panel"
+    model_overrides: {}
+
+  # Ollama Configuration (Local AI)
+  ollama:
+    name: "ollama"
+    enabled: false  # Disabled by default, enable if local inference is available
+    default_model: "llama2"
+    max_retries: 2
+    timeout: 180  # Longer timeout for local models
+    rate_limit: null  # No rate limit for local
+    custom_endpoint: "http://localhost:11434"
+    extra_headers: {}
+    model_overrides: {}
+
+  # Mistral Configuration
+  mistral:
+    name: "mistral"
+    enabled: false  # Optional for production
+    default_model: "mistral-medium"
+    max_retries: 3
+    timeout: 30
+    rate_limit: 50
+    extra_headers: {}
+    model_overrides: {}
+
+# Production caching configuration
+cache:
+  enabled: true
+  max_size: 2000  # Larger cache for production
+  ttl_seconds: 7200  # 2 hours cache TTL
+  cache_dir: null  # Uses default: ~/.nuke_ai_panel/cache
+  
+  # Production cache settings
+  encrypt_cache: true
+  compress_cache: true
+  cache_cleanup_interval: 3600  # Clean up every hour
+  max_cache_size_mb: 500  # Maximum cache size in MB
+
+# Production logging configuration
+logging:
+  level: "INFO"  # Less verbose than development
+  file_logging: true
+  console_logging: false  # Disable console logging in production
+  log_file: null  # Uses default: nuke_ai_panel.log
+  max_file_size: 52428800  # 50MB
+  backup_count: 10  # Keep 10 backup files
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s"
+  
+  # Production logging settings
+  log_rotation: true
+  compress_old_logs: true
+  sanitize_logs: true  # Remove sensitive information
+  audit_logging: true  # Enable audit trail
+
+# Production security configuration
+security:
+  encrypt_cache: true
+  encrypt_logs: false  # Optional log encryption
+  api_key_rotation_days: 60  # More frequent rotation in production
+  max_failed_auth_attempts: 3  # Stricter than development
+  session_timeout_minutes: 30  # Shorter session timeout
+  
+  # Additional security settings
+  require_https: true
+  validate_ssl_certificates: true
+  enable_request_signing: false  # Optional request signing
+  audit_api_calls: true
+  
+  # IP restrictions (optional)
+  allowed_ip_ranges: []  # Empty means all IPs allowed
+  blocked_ip_ranges: []
+
+# Production UI configuration
+ui:
+  theme: "dark"
+  font_size: 11  # Slightly smaller for production
+  auto_save: true
+  show_token_usage: true
+  max_history_items: 200  # More history for production users
+  
+  # Production UI settings
+  show_cost_tracking: true
+  show_performance_metrics: false
+  enable_shortcuts: true
+  confirm_expensive_operations: true
+
+# Production performance settings
+performance:
+  # Connection settings
+  connection_pool_size: 20  # Larger pool for production
+  connection_timeout: 30
+  read_timeout: 60
+  keep_alive_timeout: 30
+  
+  # Retry settings
+  retry_exponential_base: 2.0
+  retry_max_delay: 120.0  # Longer max delay
+  retry_jitter: true
+  
+  # Concurrency settings
+  async_batch_size: 5  # Conservative batch size
+  max_concurrent_requests: 3  # Limit concurrent requests
+  request_queue_size: 50
+  
+  # Model selection preferences
+  prefer_streaming_models: false  # Disable streaming in production for stability
+  prefer_function_calling_models: false
+  fallback_to_cheaper_models: true
+  
+  # Performance monitoring
+  enable_metrics_collection: true
+  metrics_retention_days: 30
+  performance_alerts: true
+
+# Production cost optimization
+cost_optimization:
+  enable_cost_tracking: true
+  daily_cost_limit: 200.0  # Studio daily limit
+  monthly_cost_limit: 5000.0  # Studio monthly limit
+  warn_on_expensive_models: true
+  auto_switch_to_cheaper_models: true
+  
+  # Cost thresholds
+  expensive_model_threshold: 0.01  # Per request cost threshold
+  bulk_operation_threshold: 1.0  # Bulk operation cost threshold
+  
+  # Cost reporting
+  generate_cost_reports: true
+  cost_report_recipients: []  # Email addresses for cost reports
+  cost_alert_threshold: 0.8  # Alert at 80% of limit
+
+# Production monitoring and alerting
+monitoring:
+  enable_health_checks: true
+  health_check_interval: 300  # 5 minutes
+  
+  # Performance monitoring
+  track_response_times: true
+  track_error_rates: true
+  track_usage_patterns: true
+  
+  # Alerting
+  enable_alerts: true
+  alert_channels: []  # Slack, email, etc.
+  
+  # Alert thresholds
+  high_error_rate_threshold: 0.1  # 10% error rate
+  slow_response_threshold: 10.0  # 10 seconds
+  high_usage_threshold: 1000  # Requests per hour
+
+# Production backup and recovery
+backup:
+  enable_automatic_backup: true
+  backup_interval_hours: 24
+  backup_retention_days: 30
+  backup_location: null  # Uses default backup location
+  
+  # What to backup
+  backup_sessions: true
+  backup_cache: false  # Don't backup cache
+  backup_logs: true
+  backup_config: true
+  
+  # Backup encryption
+  encrypt_backups: true
+  backup_compression: true
+
+# Studio integration settings
+studio_integration:
+  # Pipeline integration
+  enable_pipeline_hooks: false
+  pipeline_config_path: null
+  
+  # Asset management
+  integrate_with_asset_manager: false
+  asset_manager_config: {}
+  
+  # Render farm integration
+  enable_render_farm_integration: false
+  render_farm_config: {}
+  
+  # Version control integration
+  enable_version_control: false
+  version_control_config: {}
+
+# Production environment variables
+environment:
+  # Required environment variables
+  required_env_vars:
+    - "NUKE_AI_PANEL_ENV"  # Should be set to "production"
+    - "STUDIO_NAME"
+    - "USER_DEPARTMENT"
+  
+  # Optional environment variables
+  optional_env_vars:
+    - "STUDIO_PROJECT"
+    - "RENDER_FARM_URL"
+    - "ASSET_MANAGER_URL"
+
+# Feature flags for production
+feature_flags:
+  enable_experimental_features: false
+  enable_beta_features: false
+  enable_debug_features: false
+  
+  # Specific features
+  enable_streaming_responses: false  # Disabled for stability
+  enable_function_calling: true
+  enable_image_analysis: false  # Disabled until stable
+  enable_code_generation: true
+  enable_batch_processing: true
+
+# Production compliance settings
+compliance:
+  # Data retention
+  data_retention_days: 90
+  auto_delete_old_data: true
+  
+  # Privacy settings
+  anonymize_user_data: false  # Set to true if required
+  log_user_actions: true
+  
+  # Audit requirements
+  enable_audit_trail: true
+  audit_retention_days: 365
+  
+  # Compliance reporting
+  generate_compliance_reports: true
+  compliance_report_schedule: "monthly"
+
+# Production deployment settings
+deployment:
+  environment: "production"
+  deployment_id: null  # Set during deployment
+  deployment_timestamp: null  # Set during deployment
+  
+  # Health check endpoints
+  health_check_enabled: true
+  metrics_endpoint_enabled: true
+  
+  # Graceful shutdown
+  shutdown_timeout: 30
+  enable_graceful_shutdown: true
+
+# Custom studio settings (override as needed)
+custom:
+  studio_name: "Your Studio Name"
+  department: "VFX"
+  project_code: null
+  
+  # Custom integrations
+  custom_providers: {}
+  custom_workflows: {}
+  custom_templates: {}
+  
+  # Studio-specific settings
+  studio_specific_config: {}

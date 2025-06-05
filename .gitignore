@@ -1,0 +1,1007 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+#   For a library or package, you might want to ignore these files since the code is
+#   intended to run in multiple environments; otherwise, check them in:
+# .python-version
+
+# pipenv
+#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
+#   However, in case of collaboration, if having platform-specific dependencies or dependencies
+#   having no cross-platform support, pipenv may install dependencies that don't work, or not
+#   install all needed dependencies.
+#Pipfile.lock
+
+# poetry
+#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
+#   This is especially recommended for binary packages to ensure reproducibility, and is more
+#   commonly ignored for libraries.
+#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
+#poetry.lock
+
+# pdm
+#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
+#pdm.lock
+#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
+#   in version control.
+#   https://pdm.fming.dev/#use-with-ide
+.pdm.toml
+
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# PyCharm
+#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
+#  be added to the global gitignore or merged into this project gitignore.  For a PyCharm
+#  project, it is recommended to ignore the entire .idea directory.
+.idea/
+
+# Visual Studio Code
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
+# Local History for Visual Studio Code
+.history/
+
+# Built Visual Studio Code Extensions
+*.vsix
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Atom
+.atom/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Icon must end with two \r
+Icon
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+
+# Dump file
+*.stackdump
+
+# Folder config file
+[Dd]esktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+# Windows Installer files
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+
+# Windows shortcuts
+*.lnk
+
+# Linux
+*~
+
+# temporary files which can be created if a process still has a handle open of a deleted file
+.fuse_hidden*
+
+# KDE directory preferences
+.directory
+
+# Linux trash folder which might appear on any partition or disk
+.Trash-*
+
+# .nfs files are created when an open file is removed but is still being accessed
+.nfs*
+
+# Nuke AI Panel specific ignores
+# ================================
+
+# Configuration files with sensitive data
+config/local_config.yaml
+config/user_config.yaml
+config/*_local.yaml
+*.local.yaml
+
+# API keys and credentials
+.env.local
+.env.production
+.env.development
+credentials.json
+api_keys.json
+secrets.yaml
+
+# User data directories
+user_data/
+sessions/
+cache/
+logs/
+*.log
+*.log.*
+
+# Nuke specific files
+*.nk.autosave
+*.nk~
+*.nk.backup
+.nuke/
+nuke_temp/
+
+# AI Panel user directories
+.nuke_ai_panel/
+~/.nuke_ai_panel/
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+*.temp
+
+# Backup files
+*.bak
+*.backup
+*_backup
+backup_*/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Cache directories
+__pycache__/
+.cache/
+*.cache
+cache_*/
+
+# Log files
+*.log
+*.log.*
+logs/
+log_*/
+
+# Test artifacts
+.pytest_cache/
+test_results/
+test_reports/
+coverage_reports/
+
+# Performance profiling
+*.prof
+*.profile
+profiling_results/
+
+# Memory dumps
+*.dump
+*.dmp
+
+# Core dumps
+core.*
+
+# Jupyter notebooks (if used for development)
+*.ipynb
+.ipynb_checkpoints/
+
+# Documentation build artifacts
+docs/build/
+docs/_build/
+_build/
+.doctrees/
+
+# Sphinx
+_static/
+_templates/
+
+# Package build artifacts
+build/
+dist/
+*.egg-info/
+*.whl
+
+# Virtual environments
+venv*/
+env*/
+.venv*/
+.env*/
+
+# IDE specific files
+.vscode/settings.json
+.idea/
+*.sublime-*
+*.code-workspace
+
+# OS specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Network files
+.nfs*
+.smb*
+
+# Temporary directories
+tmp_*/
+temp_*/
+
+# Lock files
+*.lock
+.lock
+
+# PID files
+*.pid
+
+# Socket files
+*.sock
+
+# Named pipes
+*.fifo
+
+# Device files
+/dev/*
+
+# Mount points
+/mnt/*
+/media/*
+
+# System directories
+/proc/*
+/sys/*
+
+# Archive files (unless specifically needed)
+*.zip
+*.tar
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.rar
+*.7z
+
+# Compiled binaries
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Object files
+*.o
+*.obj
+
+# Static libraries
+*.a
+*.lib
+
+# Shared libraries
+*.so.*
+*.dylib.*
+
+# Debug files
+*.pdb
+*.dSYM/
+
+# Profiling files
+gmon.out
+*.gcov
+*.gcda
+*.gcno
+
+# Valgrind files
+*.valgrind
+
+# Sanitizer files
+*.asan
+*.tsan
+*.msan
+*.ubsan
+
+# Coverage files
+.coverage*
+coverage.xml
+htmlcov/
+
+# Benchmark results
+benchmark_results/
+*.benchmark
+
+# Security scan results
+security_scan_results/
+*.sarif
+
+# Dependency check results
+dependency_check_results/
+
+# License scan results
+license_scan_results/
+
+# Code quality reports
+code_quality_reports/
+*.quality
+
+# Performance monitoring
+performance_logs/
+*.perf
+
+# Monitoring data
+monitoring_data/
+metrics/
+
+# Alerting data
+alerts/
+notifications/
+
+# Backup directories
+backups/
+backup_*/
+
+# Archive directories
+archives/
+archive_*/
+
+# Export directories
+exports/
+export_*/
+
+# Import directories
+imports/
+import_*/
+
+# Migration files
+migrations/
+migration_*/
+
+# Seed data
+seeds/
+seed_data/
+
+# Fixtures
+fixtures/
+test_fixtures/
+
+# Mock data
+mocks/
+mock_data/
+
+# Sample data
+samples/
+sample_data/
+
+# Demo data
+demos/
+demo_data/
+
+# Training data
+training_data/
+train/
+validation/
+test_data/
+
+# Model files
+models/
+*.model
+*.pkl
+*.joblib
+
+# Weights and checkpoints
+weights/
+checkpoints/
+*.ckpt
+*.pth
+*.h5
+
+# TensorBoard logs
+tensorboard_logs/
+tb_logs/
+
+# MLflow artifacts
+mlruns/
+mlflow_artifacts/
+
+# Experiment tracking
+experiments/
+experiment_*/
+
+# Hyperparameter tuning
+hyperparameter_tuning/
+hparam_*/
+
+# AutoML results
+automl_results/
+automl_*/
+
+# Feature engineering
+feature_engineering/
+features/
+
+# Data preprocessing
+preprocessing/
+preprocessed_data/
+
+# Data validation
+data_validation/
+validation_results/
+
+# Data profiling
+data_profiling/
+profiling_results/
+
+# Data lineage
+data_lineage/
+lineage/
+
+# Data catalog
+data_catalog/
+catalog/
+
+# Metadata
+metadata/
+meta/
+
+# Schemas
+schemas/
+schema_*/
+
+# Configurations for different environments
+config/local/
+config/dev/
+config/staging/
+config/prod/
+
+# Environment specific overrides
+*_local.*
+*_dev.*
+*_staging.*
+*_prod.*
+
+# Secrets and keys
+secrets/
+keys/
+certificates/
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+
+# OAuth tokens
+tokens/
+*.token
+
+# Session files
+sessions/
+*.session
+
+# Cookies
+cookies/
+*.cookie
+
+# Browser data
+browser_data/
+*.browser
+
+# Download directories
+downloads/
+download_*/
+
+# Upload directories
+uploads/
+upload_*/
+
+# Temporary upload files
+*.upload
+*.uploading
+
+# Streaming files
+streams/
+*.stream
+
+# Queue files
+queues/
+*.queue
+
+# Lock directories
+locks/
+*.lck
+
+# Semaphore files
+*.sem
+
+# Shared memory files
+*.shm
+
+# Message queue files
+*.mq
+
+# Database connection files
+*.dsn
+
+# Connection pool files
+*.pool
+
+# Transaction log files
+*.tlog
+
+# Replication files
+*.repl
+
+# Synchronization files
+*.sync
+
+# Conflict files
+*.conflict
+
+# Merge files
+*.merge
+
+# Patch files
+*.patch
+*.diff
+
+# Stash files
+*.stash
+
+# Worktree files
+*.worktree
+
+# Submodule files
+*.submodule
+
+# Git LFS files
+*.lfs
+
+# Git attributes
+.gitattributes.local
+
+# Git hooks
+.git/hooks/local*
+
+# Git configuration
+.git/config.local
+
+# Development tools
+.devcontainer/
+.github/workflows/local*
+.gitlab-ci.local.yml
+
+# Docker
+.dockerignore.local
+docker-compose.override.yml
+docker-compose.local.yml
+Dockerfile.local
+
+# Kubernetes
+k8s/local/
+*.local.yaml
+*-local.yaml
+
+# Terraform
+*.tfstate
+*.tfstate.*
+*.tfvars.local
+.terraform/
+.terraform.lock.hcl
+
+# Ansible
+*.retry
+.vault_pass
+vault_password_file
+
+# Vagrant
+.vagrant/
+Vagrantfile.local
+
+# Packer
+packer_cache/
+*.box
+
+# Serverless
+.serverless/
+serverless.local.yml
+
+# CDK
+cdk.out/
+cdk.context.json
+
+# Pulumi
+Pulumi.*.yaml
+.pulumi/
+
+# Helm
+charts/*/charts/
+charts/*/requirements.lock
+
+# Skaffold
+skaffold.local.yaml
+
+# Tilt
+Tiltfile.local
+
+# Local development overrides
+local/
+local_*/
+*.local
+
+# Personal notes and documentation
+NOTES.md
+TODO.md
+PERSONAL.md
+notes/
+personal/
+
+# Temporary scripts
+temp_script.*
+tmp_script.*
+test_script.*
+
+# Experimental code
+experimental/
+experiments/
+playground/
+sandbox/
+
+# Prototypes
+prototypes/
+proto/
+
+# Research
+research/
+research_*/
+
+# Archive of old code
+old/
+archive/
+deprecated/
+
+# Vendor directories
+vendor/
+third_party/
+external/
+
+# Generated code
+generated/
+gen/
+auto_generated/
+
+# Build artifacts
+artifacts/
+output/
+out/
+
+# Release artifacts
+releases/
+release_*/
+
+# Deployment artifacts
+deployment/
+deploy_*/
+
+# Installation artifacts
+installation/
+install_*/
+
+# Package artifacts
+packages/
+pkg/
+
+# Distribution artifacts
+distributions/
+distrib/
+
+# Binary artifacts
+bin/
+binaries/
+
+# Library artifacts
+lib/
+libraries/
+
+# Include artifacts
+include/
+headers/
+
+# Documentation artifacts
+doc/
+documentation/
+
+# Manual artifacts
+man/
+manual/
+
+# Help artifacts
+help/
+help_*/
+
+# Tutorial artifacts
+tutorials/
+tutorial_*/
+
+# Example artifacts (keep examples/ but ignore temporary example files)
+examples/temp_*
+examples/test_*
+examples/*.tmp
+
+# Demo artifacts
+demo/
+demos/
+
+# Sample artifacts
+sample/
+samples/
+
+# Template artifacts (keep templates/ but ignore temporary template files)
+templates/temp_*
+templates/test_*
+templates/*.tmp
+
+# Asset artifacts
+assets/temp_*
+assets/test_*
+assets/*.tmp
+
+# Resource artifacts
+resources/temp_*
+resources/test_*
+resources/*.tmp
+
+# Data artifacts
+data/temp_*
+data/test_*
+data/*.tmp
+data/cache/
+data/logs/
+
+# Configuration artifacts
+config/temp_*
+config/test_*
+config/*.tmp
+
+# Script artifacts
+scripts/temp_*
+scripts/test_*
+scripts/*.tmp
+
+# Tool artifacts
+tools/temp_*
+tools/test_*
+tools/*.tmp
+
+# Utility artifacts
+utils/temp_*
+utils/test_*
+utils/*.tmp
+
+# Helper artifacts
+helpers/temp_*
+helpers/test_*
+helpers/*.tmp
+
+# Common temporary patterns
+*_temp
+*_tmp
+*_test
+*_debug
+*_old
+*_new
+*_copy
+*_backup
+
+# Numbered backups
+*.1
+*.2
+*.3
+*.4
+*.5
+
+# Dated backups
+*_20[0-9][0-9]*
+*-20[0-9][0-9]*
+
+# User specific patterns
+*_$(USER)
+*_$(USERNAME)
+*_$(LOGNAME)
+
+# Machine specific patterns
+*_$(HOSTNAME)
+*_$(COMPUTERNAME)
+
+# Process specific patterns
+*_$(PID)
+*_$$
+
+# Random patterns
+*_[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]
+
+# UUID patterns
+*_[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]-[0-9a-f][0-9a-f][0-9a-f][0-9a-f]-[0-9a-f][0-9a-f][0-9a-f][0-9a-f]-[0-9a-f][0-9a-f][0-9a-f][0-9a-f]-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]
+
+# Timestamp patterns
+*_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][0-9][0-9]
+*_[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]-[0-9][0-9]
+
+# Keep important files (override previous ignores)
+!.gitkeep
+!.gitignore
+!README.md
+!LICENSE
+!CHANGELOG.md
+!requirements.txt
+!setup.py
+!pyproject.toml
+!Makefile
+!Dockerfile
+!docker-compose.yml
+!.github/workflows/*.yml
+!.github/workflows/*.yaml
+!config/default_config.yaml
+!config/production_config.yaml
+!config/development_config.yaml
+!config/studio_config.yaml
+!examples/*.py
+!tests/*.py
+!docs/*.md
+!docs/*.rst

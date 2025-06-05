@@ -1,0 +1,134 @@
+# Default configuration for Nuke AI Panel
+# Copy this file to ~/.nuke_ai_panel/config.yaml and customize as needed
+
+version: "1.0"
+
+# AI Provider configurations
+providers:
+  # OpenAI Configuration
+  openai:
+    name: "openai"
+    enabled: true
+    default_model: "gpt-4"
+    max_retries: 3
+    timeout: 30
+    rate_limit: 60  # requests per minute
+    extra_headers: {}
+    model_overrides: {}
+
+  # Anthropic Configuration
+  anthropic:
+    name: "anthropic"
+    enabled: true
+    default_model: "claude-3-sonnet-20240229"
+    max_retries: 3
+    timeout: 30
+    rate_limit: 60
+    extra_headers: {}
+    model_overrides: {}
+
+  # Google AI Configuration
+  google:
+    name: "google"
+    enabled: true
+    default_model: "gemini-pro"
+    max_retries: 3
+    timeout: 30
+    rate_limit: 60
+    extra_headers: {}
+    model_overrides: {}
+
+  # OpenRouter Configuration
+  openrouter:
+    name: "openrouter"
+    enabled: true
+    default_model: "openai/gpt-4"
+    max_retries: 3
+    timeout: 30
+    rate_limit: 60
+    custom_endpoint: "https://openrouter.ai/api/v1"
+    extra_headers:
+      HTTP-Referer: "https://github.com/your-repo/nuke-ai-panel"
+      X-Title: "Nuke AI Panel"
+    model_overrides: {}
+
+  # Ollama Configuration (Local AI)
+  ollama:
+    name: "ollama"
+    enabled: true
+    default_model: "llama2"
+    max_retries: 3
+    timeout: 120  # Longer timeout for local models
+    rate_limit: null  # No rate limit for local
+    custom_endpoint: "http://localhost:11434"
+    extra_headers: {}
+    model_overrides: {}
+
+  # Mistral Configuration
+  mistral:
+    name: "mistral"
+    enabled: true
+    default_model: "mistral-medium"
+    max_retries: 3
+    timeout: 30
+    rate_limit: 60
+    extra_headers: {}
+    model_overrides: {}
+
+# Caching configuration
+cache:
+  enabled: true
+  max_size: 1000  # Maximum number of cached items
+  ttl_seconds: 3600  # Time to live in seconds (1 hour)
+  cache_dir: null  # Uses default: ~/.nuke_ai_panel/cache
+
+# Logging configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  file_logging: true
+  console_logging: true
+  log_file: null  # Uses default: nuke_ai_panel.log
+  max_file_size: 10485760  # 10MB
+  backup_count: 5
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Security configuration
+security:
+  encrypt_cache: true
+  api_key_rotation_days: 90
+  max_failed_auth_attempts: 5
+  session_timeout_minutes: 60
+
+# UI configuration (for future Nuke panel integration)
+ui:
+  theme: "dark"
+  font_size: 12
+  auto_save: true
+  show_token_usage: true
+  max_history_items: 100
+
+# Advanced settings
+advanced:
+  # Connection settings
+  connection_pool_size: 10
+  connection_timeout: 30
+  read_timeout: 60
+  
+  # Retry settings
+  retry_exponential_base: 2.0
+  retry_max_delay: 60.0
+  retry_jitter: true
+  
+  # Performance settings
+  async_batch_size: 10
+  max_concurrent_requests: 5
+  
+  # Model selection preferences
+  prefer_streaming_models: true
+  prefer_function_calling_models: false
+  fallback_to_cheaper_models: true
+  
+  # Cost optimization
+  enable_cost_tracking: true
+  daily_cost_limit: null  # Set to enable cost limits
+  warn_on_expensive_models: true

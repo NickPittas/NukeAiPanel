@@ -1,0 +1,239 @@
+MIT License
+
+Copyright (c) 2024 Nuke AI Panel Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+================================================================================
+
+THIRD-PARTY LICENSES
+
+This software includes components from third-party libraries. The following
+is a summary of the licenses for these components:
+
+1. aiohttp - Apache License 2.0
+   Copyright (c) 2013-2024 aiohttp contributors
+   https://github.com/aio-libs/aiohttp/blob/master/LICENSE.txt
+
+2. cryptography - Apache License 2.0 / BSD License
+   Copyright (c) Individual contributors
+   https://github.com/pyca/cryptography/blob/main/LICENSE
+
+3. pydantic - MIT License
+   Copyright (c) 2017 to present Pydantic Services Inc. and individual contributors
+   https://github.com/pydantic/pydantic/blob/main/LICENSE
+
+4. PyYAML - MIT License
+   Copyright (c) 2017-2021 Ingy döt Net
+   Copyright (c) 2006-2016 Kirill Simonov
+   https://github.com/yaml/pyyaml/blob/master/LICENSE
+
+5. OpenAI Python Library - Apache License 2.0
+   Copyright (c) OpenAI
+   https://github.com/openai/openai-python/blob/main/LICENSE
+
+6. Anthropic Python SDK - MIT License
+   Copyright (c) Anthropic
+   https://github.com/anthropics/anthropic-sdk-python/blob/main/LICENSE
+
+7. Google AI Python SDK - Apache License 2.0
+   Copyright (c) Google LLC
+   https://github.com/google/generative-ai-python/blob/main/LICENSE
+
+8. Tenacity - Apache License 2.0
+   Copyright (c) 2016-2018 Julien Danjou
+   Copyright (c) 2016 Joshua Harlow
+   Copyright (c) 2013-2014 Ray Holder
+   https://github.com/jd/tenacity/blob/main/LICENSE
+
+9. CacheTools - MIT License
+   Copyright (c) 2014-2023 Thomas Kemmer
+   https://github.com/tkem/cachetools/blob/master/LICENSE
+
+10. ColorLog - MIT License
+    Copyright (c) 2012-2021 Sam Clements
+    https://github.com/borntyping/python-colorlog/blob/master/LICENSE
+
+11. pytest - MIT License
+    Copyright (c) 2004 Holger Krekel and others
+    https://github.com/pytest-dev/pytest/blob/main/LICENSE
+
+12. Black - MIT License
+    Copyright (c) 2018 Łukasz Langa
+    https://github.com/psf/black/blob/main/LICENSE
+
+13. PySide2/PySide6 - LGPL License
+    Copyright (c) The Qt Company Ltd.
+    https://www.qt.io/licensing/
+
+================================================================================
+
+ADDITIONAL TERMS AND CONDITIONS
+
+1. ATTRIBUTION REQUIREMENTS
+   When redistributing this software or derivative works, you must:
+   - Include this license file
+   - Provide attribution to the original authors
+   - Include a notice of any modifications made
+
+2. TRADEMARK USAGE
+   - "Nuke AI Panel" is a trademark of the project maintainers
+   - Use of the trademark requires explicit permission
+   - Third-party distributions should use different branding
+
+3. COMMERCIAL USAGE
+   This software may be used for commercial purposes under the MIT License terms.
+   However, please note:
+   - AI provider APIs may have their own commercial terms
+   - Nuke software requires appropriate licensing from Foundry
+   - Some dependencies may have different commercial licensing terms
+
+4. EXPORT RESTRICTIONS
+   This software may be subject to export control laws and regulations.
+   Users are responsible for compliance with applicable laws.
+
+5. PRIVACY AND DATA HANDLING
+   - This software processes user data locally by default
+   - AI provider integrations may send data to external services
+   - Users are responsible for compliance with privacy regulations
+   - See the Privacy Policy for detailed information
+
+6. SECURITY CONSIDERATIONS
+   - This software includes security features but is provided "as is"
+   - Users are responsible for proper security configuration
+   - Regular updates are recommended for security patches
+   - Report security vulnerabilities responsibly
+
+7. SUPPORT AND WARRANTIES
+   - No warranty or support is provided under this license
+   - Commercial support may be available separately
+   - Community support is available through project channels
+
+================================================================================
+
+CONTRIBUTOR LICENSE AGREEMENT
+
+By contributing to this project, you agree that:
+
+1. You have the right to submit the contribution
+2. Your contribution is licensed under the same terms as this project
+3. You grant the project maintainers a perpetual, worldwide, non-exclusive,
+   royalty-free license to use, modify, and distribute your contribution
+
+================================================================================
+
+PATENT GRANT
+
+Subject to the terms and conditions of this License, each Contributor hereby
+grants to You a perpetual, worldwide, non-exclusive, no-charge, royalty-free,
+irrevocable (except as stated in this section) patent license to make, have
+made, use, offer to sell, sell, import, and otherwise transfer the Work,
+where such license applies only to those patent claims licensable by such
+Contributor that are necessarily infringed by their Contribution(s) alone
+or by combination of their Contribution(s) with the Work to which such
+Contribution(s) was submitted.
+
+If You institute patent litigation against any entity (including a
+cross-claim or counterclaim in a lawsuit) alleging that the Work or a
+Contribution incorporated within the Work constitutes direct or contributory
+patent infringement, then any patent licenses granted to You under this
+License for that Work shall terminate as of the date such litigation is filed.
+
+================================================================================
+
+DISCLAIMER OF LIABILITY
+
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+This includes but is not limited to:
+- Direct, indirect, incidental, special, exemplary, or consequential damages
+- Loss of profits, data, or business interruption
+- Any damages arising from the use of AI services or APIs
+- Any damages arising from integration with third-party software
+- Any security breaches or data loss
+
+================================================================================
+
+GOVERNING LAW
+
+This License shall be governed by and construed in accordance with the laws
+of the jurisdiction where the project is primarily maintained, without regard
+to its conflict of law provisions.
+
+================================================================================
+
+SEVERABILITY
+
+If any provision of this License is held to be unenforceable, such provision
+shall be reformed only to the extent necessary to make it enforceable, and
+the remainder of the License shall remain in full force and effect.
+
+================================================================================
+
+ENTIRE AGREEMENT
+
+This License constitutes the entire agreement between the parties with respect
+to the use of the Software licensed hereunder and supersedes all prior or
+contemporaneous understandings regarding such subject matter.
+
+================================================================================
+
+CONTACT INFORMATION
+
+For questions about this license or the software:
+- Project Repository: https://github.com/your-repo/nuke-ai-panel
+- Issue Tracker: https://github.com/your-repo/nuke-ai-panel/issues
+- Discussions: https://github.com/your-repo/nuke-ai-panel/discussions
+- Email: legal@nuke-ai-panel.com
+
+For security issues:
+- Security Email: security@nuke-ai-panel.com
+- PGP Key: Available on project website
+
+For commercial licensing inquiries:
+- Commercial Email: commercial@nuke-ai-panel.com
+
+================================================================================
+
+VERSION HISTORY
+
+- v1.0: Initial MIT License (2024-01-15)
+- Added third-party license acknowledgments
+- Added commercial usage clarifications
+- Added contributor license agreement
+- Added patent grant provisions
+
+================================================================================
+
+ACKNOWLEDGMENTS
+
+This project builds upon the work of many open source contributors and
+projects. We are grateful for their contributions to the software community.
+
+Special thanks to:
+- The Python Software Foundation
+- The Qt Company for PySide
+- All AI provider companies for their APIs
+- The Foundry for Nuke
+- The open source community
+
+================================================================================

@@ -1,0 +1,144 @@
+{
+  "workflows": [
+    {
+      "id": "rotoscoping_workflow",
+      "name": "Professional Rotoscoping",
+      "category": "cleanup",
+      "complexity": "intermediate",
+      "description": "Complete rotoscoping workflow for object isolation and matte creation",
+      "use_cases": [
+        "Object isolation",
+        "Matte creation",
+        "Background replacement prep",
+        "Selective color correction"
+      ],
+      "prerequisites": [
+        "Understanding of bezier curves",
+        "Knowledge of keyframe animation",
+        "Patience for detailed work"
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "title": "Load Source",
+          "description": "Load the footage that needs rotoscoping",
+          "node_type": "Read",
+          "parameters": {
+            "file": "",
+            "channels": "rgba"
+          },
+          "connections": [],
+          "notes": [
+            "Check frame range and resolution",
+            "Verify color space settings"
+          ],
+          "alternatives": [
+            "Multiple angle plates"
+          ]
+        },
+        {
+          "step_number": 2,
+          "title": "Create Roto Node",
+          "description": "Add Roto node for shape creation",
+          "node_type": "Roto",
+          "parameters": {
+            "output": "alpha",
+            "replace": false
+          },
+          "connections": [
+            ["step_1", 0]
+          ],
+          "notes": [
+            "Start with simple shapes",
+            "Work on key frames first"
+          ],
+          "alternatives": [
+            "RotoPaint for paint work"
+          ]
+        },
+        {
+          "step_number": 3,
+          "title": "Shape Animation",
+          "description": "Animate roto shapes through sequence",
+          "node_type": "Roto",
+          "parameters": {
+            "motion_blur": true,
+            "shutter": 0.5
+          },
+          "connections": [],
+          "notes": [
+            "Use motion blur for realistic edges",
+            "Key every 5-10 frames initially"
+          ],
+          "alternatives": [
+            "Planar tracking assistance"
+          ]
+        },
+        {
+          "step_number": 4,
+          "title": "Edge Refinement",
+          "description": "Refine edges with feathering and blur",
+          "node_type": "Blur",
+          "parameters": {
+            "size": 0.5,
+            "filter": "gaussian"
+          },
+          "connections": [
+            ["step_2", 0]
+          ],
+          "notes": [
+            "Match original edge softness",
+            "Avoid over-blurring"
+          ],
+          "alternatives": [
+            "FilterErode for harder edges"
+          ]
+        },
+        {
+          "step_number": 5,
+          "title": "Final Composite",
+          "description": "Use matte for final compositing",
+          "node_type": "Merge2",
+          "parameters": {
+            "operation": "over"
+          },
+          "connections": [
+            ["step_1", 0],
+            ["step_4", 1]
+          ],
+          "notes": [
+            "Check edge quality",
+            "Verify no artifacts"
+          ],
+          "alternatives": [
+            "Copy alpha to other elements"
+          ]
+        }
+      ],
+      "tips": [
+        "Work at full resolution for accuracy",
+        "Use onion skinning to see previous frames",
+        "Break complex shapes into simpler parts",
+        "Save work frequently"
+      ],
+      "common_issues": [
+        "Jittery animation from insufficient keyframes",
+        "Edge artifacts from poor feathering",
+        "Temporal inconsistency",
+        "Performance issues with complex shapes"
+      ],
+      "variations": [
+        "Planar tracking assisted roto",
+        "Multi-layer rotoscoping",
+        "Motion blur preservation"
+      ],
+      "estimated_time": "2-8 hours depending on complexity",
+      "quality_checkpoints": [
+        "Smooth shape animation",
+        "Natural edge transition",
+        "No temporal artifacts",
+        "Consistent edge quality"
+      ]
+    }
+  ]
+}
