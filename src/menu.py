@@ -130,7 +130,7 @@ class MenuIntegration:
     def analyze_script_action(self):
         """Handle script analysis action."""
         try:
-            from .nuke_integration.context_analyzer import ContextAnalyzer
+            from .nuke_integration.context_analyzer import NukeContextAnalyzer
             
             # Get current script context
             analyzer = ContextAnalyzer()

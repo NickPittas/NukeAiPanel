@@ -205,4 +205,4 @@ if __name__ == '__main__':
             print(f"Unknown command: {command}")
             print("Available commands: info, test, version")
     else:
-        print("Use 'python -m src info' for package informati
+        print("Use 'python -m src info' for package information")
