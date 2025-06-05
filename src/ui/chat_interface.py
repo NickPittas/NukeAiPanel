@@ -13,10 +13,125 @@ try:
     from PySide6.QtWidgets import *
     from PySide6.QtCore import *
     from PySide6.QtGui import *
+    HAS_QT = True
 except ImportError:
-    from PySide2.QtWidgets import *
-    from PySide2.QtCore import *
-    from PySide2.QtGui import *
+    HAS_QT = False
+    # Create minimal fallback classes for testing
+    class QWidget:
+        def __init__(self, parent=None): pass
+        def setStyleSheet(self, style): pass
+        def setup_ui(self): pass
+        def setup_connections(self): pass
+    
+    class QVBoxLayout:
+        def __init__(self, parent=None): pass
+        def setContentsMargins(self, *args): pass
+        def setSpacing(self, spacing): pass
+        def addWidget(self, widget, stretch=0): pass
+        def addLayout(self, layout): pass
+        def insertWidget(self, index, widget): pass
+        def count(self): return 1
+    
+    class QHBoxLayout:
+        def __init__(self): pass
+        def setContentsMargins(self, *args): pass
+        def addWidget(self, widget): pass
+        def addStretch(self): pass
+        def addLayout(self, layout): pass
+    
+    class QLabel:
+        def __init__(self, text=""): pass
+        def setStyleSheet(self, style): pass
+        def setText(self, text): pass
+        def setWordWrap(self, wrap): pass
+        def setTextInteractionFlags(self, flags): pass
+    
+    class QScrollArea:
+        def __init__(self): pass
+        def setWidgetResizable(self, resizable): pass
+        def setHorizontalScrollBarPolicy(self, policy): pass
+        def setVerticalScrollBarPolicy(self, policy): pass
+        def setStyleSheet(self, style): pass
+        def setWidget(self, widget): pass
+        def verticalScrollBar(self): return self
+        def setValue(self, value): pass
+        def maximum(self): return 100
+    
+    class QTextEdit:
+        def __init__(self): pass
+        def setMaximumHeight(self, height): pass
+        def setPlaceholderText(self, text): pass
+        def setStyleSheet(self, style): pass
+        def toPlainText(self): return ""
+        def clear(self): pass
+        def setPlainText(self, text): pass
+        def textCursor(self): return self
+        def setTextCursor(self, cursor): pass
+        def installEventFilter(self, filter): pass
+        def setReadOnly(self, readonly): pass
+        def append(self, text): pass
+        def verticalScrollBar(self): return self
+        textChanged = None
+    
+    class QPushButton:
+        def __init__(self, text=""): pass
+        def setFixedHeight(self, height): pass
+        def setFixedWidth(self, width): pass
+        def setDefault(self, default): pass
+        def setStyleSheet(self, style): pass
+        def setEnabled(self, enabled): pass
+        def setToolTip(self, tip): pass
+        clicked = None
+    
+    class QTimer:
+        def __init__(self): pass
+        def start(self, interval): pass
+        def stop(self): pass
+        def singleShot(interval, callback): pass
+        timeout = None
+    
+    class QApplication:
+        @staticmethod
+        def clipboard(): return type('Clipboard', (), {'setText': lambda text: None})()
+    
+    class QDialog:
+        def __init__(self, parent=None): pass
+        def setWindowTitle(self, title): pass
+        def setModal(self, modal): pass
+        def resize(self, w, h): pass
+        def exec_(self): return 0
+        def accept(self): pass
+        def reject(self): pass
+    
+    class QListWidget:
+        def __init__(self): pass
+        def addItem(self, item): pass
+        def currentItem(self): return None
+    
+    class QListWidgetItem:
+        def __init__(self, text): pass
+        def setToolTip(self, tip): pass
+        def setData(self, role, data): pass
+        def data(self, role): return None
+    
+    class QTextCursor:
+        End = 1
+        def movePosition(self, operation): pass
+    
+    class QEvent:
+        KeyPress = 1
+    
+    class Qt:
+        TextSelectableByMouse = 1
+        ScrollBarAlwaysOff = 1
+        ScrollBarAsNeeded = 1
+        Key_Return = 1
+        Key_Enter = 2
+        ControlModifier = 1
+        NoModifier = 0
+        UserRole = 1
+    
+    Signal = lambda *args: None
 
 from .action_preview import ActionPreviewDialog
 

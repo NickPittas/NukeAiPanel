@@ -15,8 +15,25 @@ from enum import Enum
 
 try:
     from PySide6.QtCore import QObject, Signal, QThread
+    HAS_QT = True
 except ImportError:
-    from PySide2.QtCore import QObject, Signal, QThread
+    HAS_QT = False
+    # Create minimal fallback classes for testing
+    class QObject:
+        def __init__(self, parent=None): pass
+    
+    class QThread:
+        def __init__(self): pass
+        def start(self): pass
+        def terminate(self): pass
+        def wait(self): pass
+        def isRunning(self): return False
+        def run(self): pass
+    
+    Signal = lambda *args: type('Signal', (), {
+        'emit': lambda *args: None,
+        'connect': lambda callback: None
+    })()
 
 try:
     import nuke
@@ -24,7 +41,7 @@ try:
 except ImportError:
     NUKE_AVAILABLE = False
 
-from ...nuke_ai_panel.utils.logger import setup_logger
+from nuke_ai_panel.utils.logger import setup_logging
 
 
 class ActionType(Enum):
@@ -89,7 +106,7 @@ class ActionExecutor(QThread):
         super().__init__()
         self.code = code
         self.context = context or {}
-        self.logger = setup_logger(__name__)
+        self.logger = setup_logging(__name__)
         
     def run(self):
         """Execute the action code."""
@@ -178,7 +195,7 @@ class ActionEngine(QObject):
     
     def __init__(self, panel_manager=None):
         super().__init__()
-        self.logger = setup_logger(__name__)
+        self.logger = setup_logging(__name__)
         self.panel_manager = panel_manager
         
         # Execution tracking

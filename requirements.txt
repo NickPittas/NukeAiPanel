@@ -27,8 +27,7 @@ numpy==1.24.4
 pandas==2.1.4
 
 # UI dependencies (optional, for standalone mode)
-PySide2==5.15.8; python_version<"3.12"
-PySide6==6.6.1; python_version>="3.12"
+PySide6==6.6.1
 
 # Development dependencies
 pytest==7.4.3

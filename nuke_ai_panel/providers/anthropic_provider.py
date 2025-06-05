@@ -6,8 +6,29 @@ Provides integration with Anthropic's Claude models including Claude-3 variants.
 
 import asyncio
 from typing import List, Optional, AsyncGenerator, Dict, Any
-import anthropic
-from anthropic import AsyncAnthropic
+
+try:
+    import anthropic
+    from anthropic import AsyncAnthropic
+    HAS_ANTHROPIC = True
+except ImportError:
+    HAS_ANTHROPIC = False
+    # Create minimal fallback classes
+    class AsyncAnthropic:
+        def __init__(self, *args, **kwargs):
+            pass
+    
+    class anthropic:
+        class AuthenticationError(Exception):
+            pass
+        class PermissionDeniedError(Exception):
+            pass
+        class RateLimitError(Exception):
+            pass
+        class NotFoundError(Exception):
+            pass
+        class BadRequestError(Exception):
+            pass
 
 from ..core.base_provider import (
     BaseProvider,
@@ -90,6 +111,10 @@ class AnthropicProvider(BaseProvider):
             config: Configuration including API key
         """
         super().__init__(name, config)
+        
+        # Check if Anthropic library is available
+        if not HAS_ANTHROPIC:
+            raise ProviderError(name, "Anthropic library not installed. Install with: pip install anthropic")
         
         self.api_key = config.get('api_key')
         self.base_url = config.get('base_url', 'https://api.anthropic.com')

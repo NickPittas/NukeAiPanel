@@ -13,10 +13,19 @@ from datetime import datetime
 
 try:
     from PySide6.QtCore import QObject, Signal
+    HAS_QT = True
 except ImportError:
-    from PySide2.QtCore import QObject, Signal
+    HAS_QT = False
+    # Create minimal fallback classes for testing
+    class QObject:
+        def __init__(self, parent=None): pass
+    
+    Signal = lambda *args: type('Signal', (), {
+        'emit': lambda *args: None,
+        'connect': lambda callback: None
+    })()
 
-from ...nuke_ai_panel.utils.logger import setup_logger
+from nuke_ai_panel.utils.logger import setup_logging
 
 
 class ChatSession:
@@ -103,7 +112,8 @@ class SessionManager(QObject):
     
     def __init__(self, panel_manager=None):
         super().__init__()
-        self.logger = setup_logger(__name__)
+        self.logger = None
+        self._setup_logger()
         self.panel_manager = panel_manager
         
         # Current session
@@ -120,6 +130,76 @@ class SessionManager(QObject):
         
         # Initialize with new session
         self.create_new_session()
+    
+    def _setup_logger(self):
+        """Set up logger with robust fallback mechanisms."""
+        try:
+            # Try to set up global logging first
+            setup_logging()
+            self.logger = logging.getLogger(__name__)
+            
+            # Ensure logger is properly configured
+            if not self.logger.handlers:
+                handler = logging.StreamHandler()
+                formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                handler.setFormatter(formatter)
+                self.logger.addHandler(handler)
+                self.logger.setLevel(logging.INFO)
+                
+        except Exception as e:
+            # Fallback: Create a basic logger if setup_logging fails
+            try:
+                self.logger = logging.getLogger(__name__)
+                if not self.logger.handlers:
+                    handler = logging.StreamHandler()
+                    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                    handler.setFormatter(formatter)
+                    self.logger.addHandler(handler)
+                    self.logger.setLevel(logging.INFO)
+            except Exception as fallback_error:
+                # Ultimate fallback: Create a minimal logger manually
+                try:
+                    self.logger = logging.getLogger('session_manager_fallback')
+                    handler = logging.StreamHandler()
+                    handler.setFormatter(logging.Formatter('%(levelname)s - %(message)s'))
+                    self.logger.addHandler(handler)
+                    self.logger.setLevel(logging.INFO)
+                except Exception:
+                    # Absolute final fallback - create minimal logger without error logging
+                    self.logger = logging.getLogger('emergency_session_logger')
+                    try:
+                        self.logger.addHandler(logging.StreamHandler())
+                        self.logger.setLevel(logging.ERROR)
+                    except Exception:
+                        # If even this fails, create a mock logger
+                        self.logger = type('MockLogger', (), {
+                            'info': lambda msg: print(f"[SESSION_INFO] {msg}"),
+                            'warning': lambda msg: print(f"[SESSION_WARNING] {msg}"),
+                            'error': lambda msg: print(f"[SESSION_ERROR] {msg}"),
+                            'debug': lambda msg: print(f"[SESSION_DEBUG] {msg}"),
+                            'critical': lambda msg: print(f"[SESSION_CRITICAL] {msg}")
+                        })()
+        
+        # Final safety check
+        if self.logger is None:
+            # Create absolute minimal mock logger
+            self.logger = type('MockLogger', (), {
+                'info': lambda msg: print(f"[SESSION_INFO] {msg}"),
+                'warning': lambda msg: print(f"[SESSION_WARNING] {msg}"),
+                'error': lambda msg: print(f"[SESSION_ERROR] {msg}"),
+                'debug': lambda msg: print(f"[SESSION_DEBUG] {msg}"),
+                'critical': lambda msg: print(f"[SESSION_CRITICAL] {msg}")
+            })()
+    
+    def _safe_log(self, level, message):
+        """Safely log a message with fallback to print if logger fails."""
+        try:
+            if self.logger:
+                getattr(self.logger, level)(message)
+            else:
+                print(f"[SESSION_{level.upper()}] {message}")
+        except Exception:
+            print(f"[SESSION_{level.upper()}] {message}")
         
     def get_sessions_directory(self) -> str:
         """Get the directory for storing sessions."""
@@ -139,7 +219,7 @@ class SessionManager(QObject):
         try:
             os.makedirs(self.sessions_dir, exist_ok=True)
         except Exception as e:
-            self.logger.error(f"Failed to create sessions directory: {e}")
+            self._safe_log("error", f"Failed to create sessions directory: {e}")
             # Fallback to temp directory
             import tempfile
             self.sessions_dir = os.path.join(tempfile.gettempdir(), "nuke_ai_sessions")
@@ -158,13 +238,13 @@ class SessionManager(QObject):
             # Add initial context
             self.update_nuke_context()
             
-            self.logger.info(f"Created new session: {self.current_session.session_id}")
+            self._safe_log("info", f"Created new session: {self.current_session.session_id}")
             self.session_changed.emit(self.current_session.session_id)
             
             return self.current_session.session_id
             
         except Exception as e:
-            self.logger.error(f"Failed to create new session: {e}")
+            self._safe_log("error", f"Failed to create new session: {e}")
             raise
             
     def load_session(self, session_id: str) -> bool:
@@ -173,7 +253,7 @@ class SessionManager(QObject):
             session_file = os.path.join(self.sessions_dir, f"{session_id}.json")
             
             if not os.path.exists(session_file):
-                self.logger.warning(f"Session file not found: {session_file}")
+                self._safe_log("warning", f"Session file not found: {session_file}")
                 return False
                 
             with open(session_file, 'r', encoding='utf-8') as f:
@@ -186,13 +266,13 @@ class SessionManager(QObject):
             # Load the requested session
             self.current_session = ChatSession.from_dict(session_data)
             
-            self.logger.info(f"Loaded session: {session_id}")
+            self._safe_log("info", f"Loaded session: {session_id}")
             self.session_changed.emit(session_id)
             
             return True
             
         except Exception as e:
-            self.logger.error(f"Failed to load session {session_id}: {e}")
+            self._safe_log("error", f"Failed to load session {session_id}: {e}")
             return False
             
     def save_session(self, session: Optional[ChatSession] = None) -> bool:
@@ -207,11 +287,11 @@ class SessionManager(QObject):
             with open(session_file, 'w', encoding='utf-8') as f:
                 json.dump(target_session.to_dict(), f, indent=2, ensure_ascii=False)
                 
-            self.logger.debug(f"Saved session: {target_session.session_id}")
+            self._safe_log("debug", f"Saved session: {target_session.session_id}")
             return True
             
         except Exception as e:
-            self.logger.error(f"Failed to save session: {e}")
+            self._safe_log("error", f"Failed to save session: {e}")
             return False
             
     def get_available_sessions(self) -> List[Dict[str, Any]]:
@@ -235,7 +315,7 @@ class SessionManager(QObject):
                         })
                         
                     except Exception as e:
-                        self.logger.warning(f"Failed to read session file {filename}: {e}")
+                        self._safe_log("warning", f"Failed to read session file {filename}: {e}")
                         
             # Sort by last updated (newest first)
             sessions.sort(key=lambda x: x['last_updated'], reverse=True)
@@ -243,7 +323,7 @@ class SessionManager(QObject):
             return sessions
             
         except Exception as e:
-            self.logger.error(f"Failed to get available sessions: {e}")
+            self._safe_log("error", f"Failed to get available sessions: {e}")
             return []
             
     def delete_session(self, session_id: str) -> bool:
@@ -253,7 +333,7 @@ class SessionManager(QObject):
             
             if os.path.exists(session_file):
                 os.remove(session_file)
-                self.logger.info(f"Deleted session: {session_id}")
+                self._safe_log("info", f"Deleted session: {session_id}")
                 
                 # If this was the current session, create a new one
                 if self.current_session and self.current_session.session_id == session_id:
@@ -261,11 +341,11 @@ class SessionManager(QObject):
                     
                 return True
             else:
-                self.logger.warning(f"Session file not found for deletion: {session_id}")
+                self._safe_log("warning", f"Session file not found for deletion: {session_id}")
                 return False
                 
         except Exception as e:
-            self.logger.error(f"Failed to delete session {session_id}: {e}")
+            self._safe_log("error", f"Failed to delete session {session_id}: {e}")
             return False
             
     def add_user_message(self, message: str, metadata: Optional[Dict] = None):
@@ -283,7 +363,7 @@ class SessionManager(QObject):
             self.session_updated.emit()
             
         except Exception as e:
-            self.logger.error(f"Failed to add user message: {e}")
+            self._safe_log("error", f"Failed to add user message: {e}")
             
     def add_ai_message(self, message: str, metadata: Optional[Dict] = None):
         """Add an AI message to the current session."""
@@ -300,7 +380,7 @@ class SessionManager(QObject):
             self.session_updated.emit()
             
         except Exception as e:
-            self.logger.error(f"Failed to add AI message: {e}")
+            self._safe_log("error", f"Failed to add AI message: {e}")
             
     def get_history(self) -> List[Dict[str, Any]]:
         """Get the current session's message history."""
@@ -309,7 +389,7 @@ class SessionManager(QObject):
                 return self.current_session.get_messages()
             return []
         except Exception as e:
-            self.logger.error(f"Failed to get history: {e}")
+            self._safe_log("error", f"Failed to get history: {e}")
             return []
             
     def get_context(self) -> Dict[str, Any]:
@@ -319,7 +399,7 @@ class SessionManager(QObject):
                 return self.current_session.context.copy()
             return {}
         except Exception as e:
-            self.logger.error(f"Failed to get context: {e}")
+            self._safe_log("error", f"Failed to get context: {e}")
             return {}
             
     def update_context(self, context_data: Dict[str, Any]):
@@ -338,7 +418,7 @@ class SessionManager(QObject):
             self.context_updated.emit(self.current_session.context)
             
         except Exception as e:
-            self.logger.error(f"Failed to update context: {e}")
+            self._safe_log("error", f"Failed to update context: {e}")
             
     def update_nuke_context(self):
         """Update context with current Nuke session information."""
@@ -355,7 +435,7 @@ class SessionManager(QObject):
                 self.update_context(context_data)
                 
         except Exception as e:
-            self.logger.error(f"Failed to update Nuke context: {e}")
+            self._safe_log("error", f"Failed to update Nuke context: {e}")
             
     def clear_session(self):
         """Clear the current session."""
@@ -372,7 +452,7 @@ class SessionManager(QObject):
                 self.session_updated.emit()
                 
         except Exception as e:
-            self.logger.error(f"Failed to clear session: {e}")
+            self._safe_log("error", f"Failed to clear session: {e}")
             
     def get_conversation_summary(self, max_messages: int = 10) -> str:
         """Get a summary of recent conversation for context."""
@@ -391,7 +471,7 @@ class SessionManager(QObject):
             return summary
             
         except Exception as e:
-            self.logger.error(f"Failed to get conversation summary: {e}")
+            self._safe_log("error", f"Failed to get conversation summary: {e}")
             return "Error getting conversation summary"
             
     def cleanup_old_sessions(self):
@@ -406,10 +486,10 @@ class SessionManager(QObject):
                 for session_info in sessions_to_delete:
                     self.delete_session(session_info['session_id'])
                     
-                self.logger.info(f"Cleaned up {len(sessions_to_delete)} old sessions")
+                self._safe_log("info", f"Cleaned up {len(sessions_to_delete)} old sessions")
                 
         except Exception as e:
-            self.logger.error(f"Failed to cleanup old sessions: {e}")
+            self._safe_log("error", f"Failed to cleanup old sessions: {e}")
             
     def export_session(self, session_id: str, filename: str) -> bool:
         """Export a session to a file."""
@@ -446,7 +526,7 @@ class SessionManager(QObject):
             return True
             
         except Exception as e:
-            self.logger.error(f"Failed to export session: {e}")
+            self._safe_log("error", f"Failed to export session: {e}")
             return False
             
     def get_current_session_id(self) -> Optional[str]:
@@ -474,5 +554,5 @@ class SessionManager(QObject):
             }
             
         except Exception as e:
-            self.logger.error(f"Failed to get session stats: {e}")
+            self._safe_log("error", f"Failed to get session stats: {e}")
             return {}

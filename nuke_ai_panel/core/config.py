@@ -6,12 +6,19 @@ for the application and AI providers.
 """
 
 import os
-import yaml
 import json
 from typing import Dict, Any, Optional, Union, List
 from pathlib import Path
 from dataclasses import dataclass, asdict
 from enum import Enum
+
+# Try to import yaml, fall back to JSON-only mode if not available
+try:
+    import yaml
+    HAS_YAML = True
+except ImportError:
+    yaml = None
+    HAS_YAML = False
 
 from .exceptions import ConfigurationError
 from ..utils.logger import get_logger
@@ -40,6 +47,10 @@ class ProviderConfig:
     custom_endpoint: Optional[str] = None
     extra_headers: Optional[Dict[str, str]] = None
     model_overrides: Optional[Dict[str, Any]] = None
+    api_key: Optional[str] = None  # Add api_key parameter support
+    temperature: Optional[float] = None  # Add temperature parameter support
+    max_tokens: Optional[int] = None  # Add max_tokens parameter support
+    base_url: Optional[str] = None  # Add base_url parameter support
     
     def __post_init__(self):
         if self.extra_headers is None:
@@ -182,12 +193,16 @@ class Config:
         
         Args:
             config_dir: Directory to store configuration files
-            config_file: Specific config file name (defaults to config.yaml)
+            config_file: Specific config file name (defaults to config.yaml or config.json if YAML unavailable)
         """
         self.config_dir = config_dir or Path.home() / ".nuke_ai_panel"
         self.config_dir.mkdir(exist_ok=True)
         
-        self.config_file = self.config_dir / (config_file or "config.yaml")
+        # Default to JSON format if YAML is not available
+        if config_file is None:
+            config_file = "config.yaml" if HAS_YAML else "config.json"
+        
+        self.config_file = self.config_dir / config_file
         self._config: Dict[str, Any] = {}
         
         # Load configuration
@@ -200,8 +215,17 @@ class Config:
                 with open(self.config_file, 'r', encoding='utf-8') as f:
                     if self.config_file.suffix.lower() == '.json':
                         self._config = json.load(f)
-                    else:
+                    elif HAS_YAML:
                         self._config = yaml.safe_load(f) or {}
+                    else:
+                        # Fallback: try to load as JSON even if extension is .yaml
+                        try:
+                            f.seek(0)
+                            self._config = json.load(f)
+                        except json.JSONDecodeError:
+                            logger.warning("YAML not available and file is not valid JSON. Using defaults.")
+                            self._config = self.DEFAULT_CONFIG.copy()
+                            return
                 
                 # Merge with defaults to ensure all keys exist
                 self._config = self._merge_configs(self.DEFAULT_CONFIG, self._config)
@@ -220,8 +244,11 @@ class Config:
         """Save configuration to file."""
         try:
             with open(self.config_file, 'w', encoding='utf-8') as f:
-                if self.config_file.suffix.lower() == '.json':
+                if self.config_file.suffix.lower() == '.json' or not HAS_YAML:
+                    # Use JSON format if explicitly requested or if YAML is not available
                     json.dump(self._config, f, indent=2)
+                    if not HAS_YAML and self.config_file.suffix.lower() != '.json':
+                        logger.warning("YAML not available, saved configuration as JSON format")
                 else:
                     yaml.dump(self._config, f, default_flow_style=False, indent=2)
             
@@ -470,15 +497,18 @@ class Config:
             backup_path: Path to save backup
         """
         try:
+            import datetime
             backup_data = {
                 "config": self._config,
                 "version": "1.0",
-                "created_at": str(Path.ctime(Path.now()))
+                "created_at": datetime.datetime.now().isoformat()
             }
             
             with open(backup_path, 'w', encoding='utf-8') as f:
-                if backup_path.suffix.lower() == '.json':
+                if backup_path.suffix.lower() == '.json' or not HAS_YAML:
                     json.dump(backup_data, f, indent=2)
+                    if not HAS_YAML and backup_path.suffix.lower() != '.json':
+                        logger.warning("YAML not available, saved backup as JSON format")
                 else:
                     yaml.dump(backup_data, f, default_flow_style=False, indent=2)
             

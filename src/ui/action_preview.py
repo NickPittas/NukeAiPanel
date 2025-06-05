@@ -14,10 +14,117 @@ try:
     from PySide6.QtWidgets import *
     from PySide6.QtCore import *
     from PySide6.QtGui import *
+    HAS_QT = True
 except ImportError:
-    from PySide2.QtWidgets import *
-    from PySide2.QtCore import *
-    from PySide2.QtGui import *
+    HAS_QT = False
+    # Create minimal fallback classes for testing
+    class QWidget:
+        def __init__(self, parent=None): pass
+        def setStyleSheet(self, style): pass
+    
+    class QVBoxLayout:
+        def __init__(self, parent=None): pass
+        def setSpacing(self, spacing): pass
+        def addWidget(self, widget): pass
+        def addLayout(self, layout): pass
+        def addStretch(self): pass
+    
+    class QHBoxLayout:
+        def __init__(self): pass
+        def setContentsMargins(self, *args): pass
+        def addWidget(self, widget): pass
+        def addStretch(self): pass
+    
+    class QLabel:
+        def __init__(self, text=""): pass
+        def setStyleSheet(self, style): pass
+        def setToolTip(self, tip): pass
+    
+    class QTextEdit:
+        def __init__(self): pass
+        def setPlainText(self, text): pass
+        def setFont(self, font): pass
+        def setStyleSheet(self, style): pass
+        def setReadOnly(self, readonly): pass
+        def setHtml(self, html): pass
+        def toPlainText(self): return ""
+        def isReadOnly(self): return True
+        def document(self): return self
+        def clear(self): pass
+        def append(self, text): pass
+        def verticalScrollBar(self): return self
+        def setValue(self, value): pass
+        def maximum(self): return 100
+    
+    class QPushButton:
+        def __init__(self, text=""): pass
+        def setToolTip(self, tip): pass
+        def setStyleSheet(self, style): pass
+        def setEnabled(self, enabled): pass
+        def setText(self, text): pass
+        def setFixedSize(self, w, h): pass
+        clicked = None
+    
+    class QTabWidget:
+        def __init__(self): pass
+        def addTab(self, widget, title): pass
+        def setCurrentIndex(self, index): pass
+    
+    class QDialog:
+        def __init__(self, parent=None): pass
+        def setWindowTitle(self, title): pass
+        def setModal(self, modal): pass
+        def resize(self, w, h): pass
+        def setStyleSheet(self, style): pass
+        def accept(self): pass
+        def reject(self): pass
+    
+    class QSyntaxHighlighter:
+        def __init__(self, parent=None): pass
+        def setDocument(self, doc): pass
+        def highlightBlock(self, text): pass
+        def setFormat(self, start, length, format): pass
+    
+    class QTextCharFormat:
+        def setForeground(self, color): pass
+        def setFontWeight(self, weight): pass
+        def setFontItalic(self, italic): pass
+    
+    class QColor:
+        def __init__(self, color): pass
+    
+    class QFont:
+        Bold = 1
+        def __init__(self, family, size): pass
+    
+    class QRegExp:
+        def __init__(self, pattern): pass
+        def indexIn(self, text, start=0): return -1
+        def matchedLength(self): return 0
+    
+    class QApplication:
+        @staticmethod
+        def clipboard(): return type('Clipboard', (), {'setText': lambda text: None})()
+    
+    class QFileDialog:
+        @staticmethod
+        def getSaveFileName(*args): return ("", "")
+    
+    class QMessageBox:
+        Yes = 1
+        No = 0
+        @staticmethod
+        def question(*args): return 0
+        @staticmethod
+        def warning(*args): pass
+        @staticmethod
+        def critical(*args): pass
+    
+    class QTimer:
+        @staticmethod
+        def singleShot(interval, callback): pass
+    
+    Signal = lambda *args: None
 
 try:
     import nuke

@@ -12,10 +12,153 @@ try:
     from PySide6.QtWidgets import *
     from PySide6.QtCore import *
     from PySide6.QtGui import *
+    HAS_QT = True
 except ImportError:
-    from PySide2.QtWidgets import *
-    from PySide2.QtCore import *
-    from PySide2.QtGui import *
+    HAS_QT = False
+    # Create minimal fallback classes for testing
+    class QWidget:
+        def __init__(self, parent=None): pass
+        def setStyleSheet(self, style): pass
+        def deleteLater(self): pass
+    
+    class QVBoxLayout:
+        def __init__(self, parent=None): pass
+        def setContentsMargins(self, *args): pass
+        def setSpacing(self, spacing): pass
+        def addWidget(self, widget): pass
+        def addLayout(self, layout): pass
+        def addStretch(self): pass
+        def takeAt(self, index): return type('Item', (), {'widget': lambda: None})()
+        def count(self): return 0
+    
+    class QHBoxLayout:
+        def __init__(self): pass
+        def setContentsMargins(self, *args): pass
+        def addWidget(self, widget): pass
+        def addStretch(self): pass
+        def addLayout(self, layout): pass
+    
+    class QFormLayout:
+        def __init__(self, parent=None): pass
+        def setSpacing(self, spacing): pass
+        def addRow(self, label, widget=None): pass
+    
+    class QLabel:
+        def __init__(self, text=""): pass
+        def setStyleSheet(self, style): pass
+        def setText(self, text): pass
+        def setFixedWidth(self, width): pass
+        def setAlignment(self, alignment): pass
+    
+    class QLineEdit:
+        Password = 1
+        Normal = 0
+        def __init__(self): pass
+        def setEchoMode(self, mode): pass
+        def setText(self, text): pass
+        def setPlaceholderText(self, text): pass
+        def text(self): return ""
+    
+    class QPushButton:
+        def __init__(self, text=""): pass
+        def setIcon(self, icon): pass
+        def setFixedSize(self, w, h): pass
+        def setCheckable(self, checkable): pass
+        def setToolTip(self, tip): pass
+        def setStyleSheet(self, style): pass
+        def setFixedHeight(self, height): pass
+        clicked = None
+        toggled = None
+    
+    class QComboBox:
+        def __init__(self): pass
+        def setEditable(self, editable): pass
+        def addItems(self, items): pass
+        def setCurrentText(self, text): pass
+        def setCurrentIndex(self, index): pass
+        def currentText(self): return ""
+        def findText(self, text): return -1
+    
+    class QSlider:
+        def __init__(self, orientation): pass
+        def setRange(self, min_val, max_val): pass
+        def setValue(self, value): pass
+        def value(self): return 0
+        valueChanged = None
+    
+    class QSpinBox:
+        def __init__(self): pass
+        def setRange(self, min_val, max_val): pass
+        def setValue(self, value): pass
+        def setSuffix(self, suffix): pass
+        def value(self): return 0
+    
+    class QCheckBox:
+        def __init__(self, text=""): pass
+        def setChecked(self, checked): pass
+        def isChecked(self): return False
+    
+    class QTabWidget:
+        def __init__(self): pass
+        def addTab(self, widget, title): pass
+    
+    class QScrollArea:
+        def __init__(self): pass
+        def setWidgetResizable(self, resizable): pass
+        def setHorizontalScrollBarPolicy(self, policy): pass
+        def setWidget(self, widget): pass
+    
+    class QDialog:
+        def __init__(self, parent=None): pass
+        def setWindowTitle(self, title): pass
+        def setModal(self, modal): pass
+        def resize(self, w, h): pass
+        def setStyleSheet(self, style): pass
+        def exec_(self): return 0
+        def accept(self): pass
+        def reject(self): pass
+        def findChild(self, type): return None
+    
+    class QDialogButtonBox:
+        Ok = 1
+        Cancel = 2
+        Apply = 4
+        def __init__(self, buttons): pass
+        def button(self, button): return QPushButton()
+        accepted = None
+        rejected = None
+    
+    class QProgressDialog:
+        def __init__(self, text, cancel_text, min_val, max_val, parent): pass
+        def setWindowModality(self, modality): pass
+        def show(self): pass
+        def close(self): pass
+    
+    class QMessageBox:
+        @staticmethod
+        def question(*args): return 0
+        @staticmethod
+        def information(*args): pass
+        @staticmethod
+        def warning(*args): pass
+    
+    class QFileDialog:
+        @staticmethod
+        def getSaveFileName(*args): return ("", "")
+        @staticmethod
+        def getOpenFileName(*args): return ("", "")
+    
+    class QStyle:
+        SP_DialogApplyButton = 1
+        def standardIcon(self, icon): return None
+    
+    class Qt:
+        Horizontal = 1
+        AlignCenter = 1
+        ScrollBarAlwaysOff = 1
+        WindowModal = 1
+    
+    Signal = lambda *args: None
 
 
 class ProviderSettingsWidget(QWidget):
@@ -44,9 +187,16 @@ class ProviderSettingsWidget(QWidget):
         form_layout = QFormLayout()
         form_layout.setSpacing(6)
         
-        # API Key
-        api_key_widget = self.create_api_key_widget()
-        form_layout.addRow("API Key:", api_key_widget)
+        # API Key (optional for Ollama)
+        if self.provider_name.lower() != 'ollama':
+            api_key_widget = self.create_api_key_widget()
+            form_layout.addRow("API Key:", api_key_widget)
+        else:
+            # For Ollama, show API key as optional
+            api_key_widget = self.create_api_key_widget()
+            api_key_label = QLabel("API Key (Optional):")
+            api_key_label.setStyleSheet("color: #B0B0B0; font-style: italic;")
+            form_layout.addRow(api_key_label, api_key_widget)
         
         # Base URL (for some providers)
         if self.provider_name in ['openai', 'openrouter', 'ollama']:
@@ -100,7 +250,8 @@ class ProviderSettingsWidget(QWidget):
     def create_api_key_widget(self) -> QWidget:
         """Create API key input widget with show/hide functionality."""
         widget = QWidget()
-        layout = QHBoxLayout(widget)
+        layout = QHBoxLayout()
+        widget.setLayout(layout)
         layout.setContentsMargins(0, 0, 0, 0)
         
         # API key input
@@ -241,15 +392,269 @@ class ProviderSettingsWidget(QWidget):
             progress.setWindowModality(Qt.WindowModal)
             progress.show()
             
-            # TODO: Implement actual connection test
-            # This would use the panel manager to test the provider
-            QTimer.singleShot(2000, lambda: self.connection_test_complete(progress, True))
+            # Perform actual connection test
+            self._perform_real_connection_test(progress, settings)
             
         except Exception as e:
             logging.error(f"Connection test failed: {e}")
             QMessageBox.warning(self, "Connection Test", f"Test failed: {e}")
             
-    def connection_test_complete(self, progress: QProgressDialog, success: bool):
+    def _perform_real_connection_test(self, progress: QProgressDialog, settings: Dict[str, Any]):
+        """Perform actual connection test with real API calls."""
+        import asyncio
+        import threading
+        
+        def test_thread():
+            """Run the connection test in a separate thread."""
+            try:
+                # Create event loop for this thread
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
+                try:
+                    # Run the actual test
+                    success, error_msg = loop.run_until_complete(
+                        self._test_provider_connection_async(settings)
+                    )
+                    
+                    # Schedule UI update on main thread
+                    QTimer.singleShot(0, lambda: self.connection_test_complete(progress, success, error_msg))
+                    
+                finally:
+                    loop.close()
+                    
+            except Exception as e:
+                error_msg = f"Test failed: {str(e)}"
+                QTimer.singleShot(0, lambda: self.connection_test_complete(progress, False, error_msg))
+        
+        # Start test in background thread
+        thread = threading.Thread(target=test_thread, daemon=True)
+        thread.start()
+    
+    async def _test_provider_connection_async(self, settings: Dict[str, Any]) -> tuple[bool, str]:
+        """Perform async connection test for the provider."""
+        try:
+            if self.provider_name.lower() == 'ollama':
+                return await self._test_ollama_connection(settings)
+            elif self.provider_name.lower() == 'openai':
+                return await self._test_openai_connection(settings)
+            elif self.provider_name.lower() == 'anthropic':
+                return await self._test_anthropic_connection(settings)
+            elif self.provider_name.lower() == 'google':
+                return await self._test_google_connection(settings)
+            elif self.provider_name.lower() == 'mistral':
+                return await self._test_mistral_connection(settings)
+            elif self.provider_name.lower() == 'openrouter':
+                return await self._test_openrouter_connection(settings)
+            else:
+                return False, f"Unknown provider: {self.provider_name}"
+                
+        except Exception as e:
+            return False, f"Connection test failed: {str(e)}"
+    
+    async def _test_ollama_connection(self, settings: Dict[str, Any]) -> tuple[bool, str]:
+        """Test Ollama connection."""
+        try:
+            import aiohttp
+            
+            base_url = settings.get('base_url', 'http://localhost:11434')
+            timeout = settings.get('timeout', 30)
+            api_key = settings.get('api_key', '').strip()
+            
+            headers = {'Content-Type': 'application/json'}
+            # Add API key if provided (optional for Ollama)
+            if api_key:
+                headers['Authorization'] = f'Bearer {api_key}'
+            
+            timeout_obj = aiohttp.ClientTimeout(total=timeout)
+            
+            async with aiohttp.ClientSession(headers=headers, timeout=timeout_obj) as session:
+                async with session.get(f'{base_url}/api/tags') as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        model_count = len(data.get('models', []))
+                        auth_status = "with authentication" if api_key else "without authentication"
+                        return True, f"Connected successfully {auth_status}! Found {model_count} models."
+                    else:
+                        return False, f"Ollama server responded with HTTP {response.status}"
+                        
+        except aiohttp.ClientConnectorError:
+            return False, f"Cannot connect to Ollama at {base_url}. Is Ollama running on the specified URL?"
+        except Exception as e:
+            return False, f"Connection failed: {str(e)}"
+    
+    async def _test_openai_connection(self, settings: Dict[str, Any]) -> tuple[bool, str]:
+        """Test OpenAI connection."""
+        try:
+            import aiohttp
+            
+            api_key = settings.get('api_key', '').strip()
+            if not api_key:
+                return False, "API key is required for OpenAI"
+            
+            base_url = settings.get('base_url', 'https://api.openai.com/v1')
+            timeout = settings.get('timeout', 30)
+            
+            headers = {
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json'
+            }
+            
+            timeout_obj = aiohttp.ClientTimeout(total=timeout)
+            
+            async with aiohttp.ClientSession(headers=headers, timeout=timeout_obj) as session:
+                async with session.get(f'{base_url}/models') as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        model_count = len(data.get('data', []))
+                        return True, f"Connected successfully! Found {model_count} models."
+                    elif response.status == 401:
+                        return False, "Invalid API key"
+                    else:
+                        return False, f"OpenAI API responded with HTTP {response.status}"
+                        
+        except Exception as e:
+            return False, f"Connection failed: {str(e)}"
+    
+    async def _test_anthropic_connection(self, settings: Dict[str, Any]) -> tuple[bool, str]:
+        """Test Anthropic connection."""
+        try:
+            import aiohttp
+            
+            api_key = settings.get('api_key', '').strip()
+            if not api_key:
+                return False, "API key is required for Anthropic"
+            
+            timeout = settings.get('timeout', 30)
+            
+            headers = {
+                'x-api-key': api_key,
+                'Content-Type': 'application/json',
+                'anthropic-version': '2023-06-01'
+            }
+            
+            # Test with a minimal message
+            payload = {
+                'model': 'claude-3-haiku-20240307',
+                'max_tokens': 10,
+                'messages': [{'role': 'user', 'content': 'Hi'}]
+            }
+            
+            timeout_obj = aiohttp.ClientTimeout(total=timeout)
+            
+            async with aiohttp.ClientSession(headers=headers, timeout=timeout_obj) as session:
+                async with session.post('https://api.anthropic.com/v1/messages', json=payload) as response:
+                    if response.status == 200:
+                        return True, "Connected successfully!"
+                    elif response.status == 401:
+                        return False, "Invalid API key"
+                    elif response.status == 400:
+                        # Bad request might still indicate valid auth
+                        error_data = await response.json()
+                        if 'error' in error_data and 'authentication' not in error_data['error'].get('message', '').lower():
+                            return True, "Connected successfully! (API key is valid)"
+                        return False, f"Authentication failed: {error_data.get('error', {}).get('message', 'Unknown error')}"
+                    else:
+                        return False, f"Anthropic API responded with HTTP {response.status}"
+                        
+        except Exception as e:
+            return False, f"Connection failed: {str(e)}"
+    
+    async def _test_google_connection(self, settings: Dict[str, Any]) -> tuple[bool, str]:
+        """Test Google connection."""
+        try:
+            import aiohttp
+            
+            api_key = settings.get('api_key', '').strip()
+            if not api_key:
+                return False, "API key is required for Google"
+            
+            timeout = settings.get('timeout', 30)
+            timeout_obj = aiohttp.ClientTimeout(total=timeout)
+            
+            # Test with models endpoint
+            url = f'https://generativelanguage.googleapis.com/v1/models?key={api_key}'
+            
+            async with aiohttp.ClientSession(timeout=timeout_obj) as session:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        model_count = len(data.get('models', []))
+                        return True, f"Connected successfully! Found {model_count} models."
+                    elif response.status == 403:
+                        return False, "Invalid API key or insufficient permissions"
+                    else:
+                        return False, f"Google API responded with HTTP {response.status}"
+                        
+        except Exception as e:
+            return False, f"Connection failed: {str(e)}"
+    
+    async def _test_mistral_connection(self, settings: Dict[str, Any]) -> tuple[bool, str]:
+        """Test Mistral connection."""
+        try:
+            import aiohttp
+            
+            api_key = settings.get('api_key', '').strip()
+            if not api_key:
+                return False, "API key is required for Mistral"
+            
+            timeout = settings.get('timeout', 30)
+            
+            headers = {
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json'
+            }
+            
+            timeout_obj = aiohttp.ClientTimeout(total=timeout)
+            
+            async with aiohttp.ClientSession(headers=headers, timeout=timeout_obj) as session:
+                async with session.get('https://api.mistral.ai/v1/models') as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        model_count = len(data.get('data', []))
+                        return True, f"Connected successfully! Found {model_count} models."
+                    elif response.status == 401:
+                        return False, "Invalid API key"
+                    else:
+                        return False, f"Mistral API responded with HTTP {response.status}"
+                        
+        except Exception as e:
+            return False, f"Connection failed: {str(e)}"
+    
+    async def _test_openrouter_connection(self, settings: Dict[str, Any]) -> tuple[bool, str]:
+        """Test OpenRouter connection."""
+        try:
+            import aiohttp
+            
+            api_key = settings.get('api_key', '').strip()
+            if not api_key:
+                return False, "API key is required for OpenRouter"
+            
+            base_url = settings.get('base_url', 'https://openrouter.ai/api/v1')
+            timeout = settings.get('timeout', 30)
+            
+            headers = {
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json'
+            }
+            
+            timeout_obj = aiohttp.ClientTimeout(total=timeout)
+            
+            async with aiohttp.ClientSession(headers=headers, timeout=timeout_obj) as session:
+                async with session.get(f'{base_url}/models') as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        model_count = len(data.get('data', []))
+                        return True, f"Connected successfully! Found {model_count} models."
+                    elif response.status == 401:
+                        return False, "Invalid API key"
+                    else:
+                        return False, f"OpenRouter API responded with HTTP {response.status}"
+                        
+        except Exception as e:
+            return False, f"Connection failed: {str(e)}"
+            
+    def connection_test_complete(self, progress: QProgressDialog, success: bool, error_msg: str = ""):
         """Handle connection test completion."""
         progress.close()
         
@@ -257,45 +662,77 @@ class ProviderSettingsWidget(QWidget):
             QMessageBox.information(
                 self,
                 "Connection Test",
-                "Connection successful!"
+                error_msg if error_msg else "Connection successful!"
             )
         else:
             QMessageBox.warning(
                 self,
-                "Connection Test", 
-                "Connection failed. Please check your settings."
+                "Connection Test",
+                error_msg if error_msg else "Connection failed. Please check your settings."
             )
             
     def get_settings(self) -> Dict[str, Any]:
         """Get the current settings from the widgets."""
         settings = {}
         
-        for key, widget in self.widgets.items():
-            if isinstance(widget, QLineEdit):
-                settings[key] = widget.text()
-            elif isinstance(widget, QComboBox):
-                settings[key] = widget.currentText()
-            elif isinstance(widget, QSpinBox):
-                settings[key] = widget.value()
-            elif isinstance(widget, QSlider):
-                settings[key] = widget.value() / 100.0
+        try:
+            for key, widget in self.widgets.items():
+                # Check if widget is still valid before accessing
+                if not self._is_widget_valid(widget):
+                    continue
+                    
+                if isinstance(widget, QLineEdit):
+                    settings[key] = widget.text()
+                elif isinstance(widget, QComboBox):
+                    settings[key] = widget.currentText()
+                elif isinstance(widget, QSpinBox):
+                    settings[key] = widget.value()
+                elif isinstance(widget, QSlider):
+                    settings[key] = widget.value() / 100.0
+        except Exception as e:
+            logging.error(f"Error getting settings from widgets: {e}")
                 
         return settings
         
     def set_settings(self, settings: Dict[str, Any]):
         """Set the settings in the widgets."""
-        for key, value in settings.items():
-            if key in self.widgets:
-                widget = self.widgets[key]
-                
-                if isinstance(widget, QLineEdit):
-                    widget.setText(str(value))
-                elif isinstance(widget, QComboBox):
-                    widget.setCurrentText(str(value))
-                elif isinstance(widget, QSpinBox):
-                    widget.setValue(int(value))
-                elif isinstance(widget, QSlider):
-                    widget.setValue(int(float(value) * 100))
+        try:
+            for key, value in settings.items():
+                if key in self.widgets:
+                    widget = self.widgets[key]
+                    
+                    # Check if widget is still valid before accessing
+                    if not self._is_widget_valid(widget):
+                        continue
+                    
+                    if isinstance(widget, QLineEdit):
+                        widget.setText(str(value))
+                    elif isinstance(widget, QComboBox):
+                        widget.setCurrentText(str(value))
+                    elif isinstance(widget, QSpinBox):
+                        widget.setValue(int(value))
+                    elif isinstance(widget, QSlider):
+                        widget.setValue(int(float(value) * 100))
+        except Exception as e:
+            logging.error(f"Error setting widget values: {e}")
+    
+    def _is_widget_valid(self, widget) -> bool:
+        """Check if a Qt widget is still valid and not deleted."""
+        if not HAS_QT:
+            return True  # In fallback mode, widgets are always "valid"
+            
+        try:
+            # Try to access a basic property to check if widget is still alive
+            if hasattr(widget, 'isVisible'):
+                widget.isVisible()
+                return True
+            return False
+        except RuntimeError:
+            # Widget has been deleted
+            return False
+        except Exception:
+            # Other errors, assume widget is invalid
+            return False
 
 
 class SettingsDialog(QDialog):
@@ -552,6 +989,11 @@ class SettingsDialog(QDialog):
     def apply_settings(self):
         """Apply the current settings without closing the dialog."""
         try:
+            # Check if dialog widgets are still valid before proceeding
+            if not self._are_main_widgets_valid():
+                self.logger.error("Settings dialog widgets are no longer valid")
+                return
+                
             self.save_settings()
             QMessageBox.information(self, "Settings", "Settings applied successfully!")
             
@@ -562,6 +1004,11 @@ class SettingsDialog(QDialog):
     def accept_settings(self):
         """Accept and save the settings."""
         try:
+            # Check if dialog widgets are still valid before proceeding
+            if not self._are_main_widgets_valid():
+                self.logger.error("Settings dialog widgets are no longer valid")
+                return
+                
             self.save_settings()
             self.accept()
             
@@ -573,28 +1020,69 @@ class SettingsDialog(QDialog):
         """Save the current settings."""
         if not self.panel_manager:
             return
-            
-        # Collect general settings
-        general_settings = {
-            'default_provider': self.default_provider_combo.currentText(),
-            'auto_save_history': self.auto_save_check.isChecked(),
-            'show_typing_indicators': self.typing_indicators_check.isChecked(),
-            'auto_scroll': self.auto_scroll_check.isChecked(),
-            'theme': self.theme_combo.currentText(),
-            'log_level': self.log_level_combo.currentText(),
-            'enable_cache': self.enable_cache_check.isChecked(),
-            'cache_size_mb': self.cache_size_spin.value(),
-            'enable_rate_limiting': self.rate_limit_check.isChecked(),
-            'max_concurrent_requests': self.concurrent_requests_spin.value()
-        }
         
-        # Collect provider settings
-        provider_settings = {}
-        for provider_name, widget in self.provider_widgets.items():
-            provider_settings[provider_name] = widget.get_settings()
+        try:
+            # Check if main widgets are still valid
+            if not self._are_main_widgets_valid():
+                self.logger.error("Cannot save settings - main widgets are no longer valid")
+                return
             
-        # Save to panel manager
-        self.panel_manager.update_settings(general_settings, provider_settings)
+            # Collect general settings with widget validation
+            general_settings = {}
+            
+            if self._is_widget_valid(self.default_provider_combo):
+                general_settings['default_provider'] = self.default_provider_combo.currentText()
+            if self._is_widget_valid(self.auto_save_check):
+                general_settings['auto_save_history'] = self.auto_save_check.isChecked()
+            if self._is_widget_valid(self.typing_indicators_check):
+                general_settings['show_typing_indicators'] = self.typing_indicators_check.isChecked()
+            if self._is_widget_valid(self.auto_scroll_check):
+                general_settings['auto_scroll'] = self.auto_scroll_check.isChecked()
+            if self._is_widget_valid(self.theme_combo):
+                general_settings['theme'] = self.theme_combo.currentText()
+            if self._is_widget_valid(self.log_level_combo):
+                general_settings['log_level'] = self.log_level_combo.currentText()
+            if self._is_widget_valid(self.enable_cache_check):
+                general_settings['enable_cache'] = self.enable_cache_check.isChecked()
+            if self._is_widget_valid(self.cache_size_spin):
+                general_settings['cache_size_mb'] = self.cache_size_spin.value()
+            if self._is_widget_valid(self.rate_limit_check):
+                general_settings['enable_rate_limiting'] = self.rate_limit_check.isChecked()
+            if self._is_widget_valid(self.concurrent_requests_spin):
+                general_settings['max_concurrent_requests'] = self.concurrent_requests_spin.value()
+            
+            # Collect provider settings
+            provider_settings = {}
+            for provider_name, widget in self.provider_widgets.items():
+                if self._is_widget_valid(widget):
+                    provider_settings[provider_name] = widget.get_settings()
+                
+            # Save to panel manager
+            self.panel_manager.update_settings(general_settings, provider_settings)
+            
+        except Exception as e:
+            self.logger.error(f"Error during save_settings: {e}")
+            raise
+    
+    def _is_widget_valid(self, widget):
+        """Check if a Qt widget is still valid and not deleted."""
+        try:
+            if widget is None:
+                return False
+            # Try to access a basic property to check if widget is still valid
+            widget.isVisible()
+            return True
+        except (RuntimeError, AttributeError):
+            return False
+
+    def _are_main_widgets_valid(self):
+        """Check if main dialog widgets are still valid."""
+        try:
+            # Check key widgets that are accessed during save operations
+            return (hasattr(self, 'provider_selector') and self._is_widget_valid(self.provider_selector) and
+                    hasattr(self, 'default_provider_combo') and self._is_widget_valid(self.default_provider_combo))
+        except Exception:
+            return False
         
     def export_settings(self):
         """Export settings to a file."""

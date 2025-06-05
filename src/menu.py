@@ -24,6 +24,15 @@ class MenuIntegration:
     
     def __init__(self):
         self.logger = logging.getLogger(__name__)
+        
+        # Ensure logger is properly configured
+        if not self.logger.handlers:
+            handler = logging.StreamHandler()
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            handler.setFormatter(formatter)
+            self.logger.addHandler(handler)
+            self.logger.setLevel(logging.INFO)
+            
         self.panel_registered = False
         
     def register_panel(self) -> bool:
@@ -62,7 +71,7 @@ class MenuIntegration:
             # Add panel show command
             ai_menu.addCommand(
                 'Show Panel',
-                'nukescripts.showPanel("com.nukeaipanel.AIAssistant")',
+                'from src.ui.main_panel import NukeAIPanel; panel = NukeAIPanel(); panel.show()',
                 tooltip='Show the AI Assistant panel'
             )
             
@@ -133,8 +142,8 @@ class MenuIntegration:
             from .nuke_integration.context_analyzer import NukeContextAnalyzer
             
             # Get current script context
-            analyzer = ContextAnalyzer()
-            context = analyzer.get_full_context()
+            analyzer = NukeContextAnalyzer()
+            context = analyzer.get_session_context()
             
             if not context:
                 nuke.message("No script loaded or script is empty.")
@@ -159,7 +168,12 @@ class MenuIntegration:
             
             # Get best practices
             bp_engine = BestPracticesEngine()
-            practices = bp_engine.get_general_practices()
+            # Get practices from all categories
+            from .vfx_knowledge.best_practices import PracticeCategory
+            practices = []
+            for category in PracticeCategory:
+                category_practices = bp_engine.get_practices_by_category(category)
+                practices.extend([f"{p.title}: {p.description}" for p in category_practices[:2]])  # Top 2 from each category
             
             if practices:
                 practices_text = "VFX Best Practices:\n\n"
@@ -243,7 +257,7 @@ For more help, visit the documentation or ask the AI directly!
             # Create AI Assistant button
             toolbar.addCommand(
                 "AI Assistant",
-                'nukescripts.showPanel("com.nukeaipanel.AIAssistant")',
+                'from src.ui.main_panel import NukeAIPanel; panel = NukeAIPanel(); panel.show()',
                 tooltip="Open AI Assistant Panel",
                 icon="AIAssistant.png"  # You would need to provide this icon
             )
@@ -262,7 +276,7 @@ For more help, visit the documentation or ask the AI directly!
             # Register Ctrl+Shift+A to open AI panel
             nuke.menu('Nuke').addCommand(
                 'AI Assistant/Show Panel',
-                'nukescripts.showPanel("com.nukeaipanel.AIAssistant")',
+                'from src.ui.main_panel import NukeAIPanel; panel = NukeAIPanel(); panel.show()',
                 'ctrl+shift+a'
             )
             

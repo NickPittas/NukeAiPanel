@@ -13,8 +13,31 @@ from datetime import datetime
 
 try:
     from PySide6.QtCore import QObject, Signal, QThread, QTimer
+    HAS_QT = True
 except ImportError:
-    from PySide2.QtCore import QObject, Signal, QThread, QTimer
+    HAS_QT = False
+    # Create minimal fallback classes for testing
+    class QObject:
+        def __init__(self, parent=None): pass
+    
+    class QThread:
+        def __init__(self): pass
+        def start(self): pass
+        def terminate(self): pass
+        def wait(self): pass
+        def isRunning(self): return False
+        def run(self): pass
+    
+    class QTimer:
+        def __init__(self): pass
+        def start(self, interval): pass
+        def stop(self): pass
+        timeout = None
+    
+    Signal = lambda *args: type('Signal', (), {
+        'emit': lambda *args: None,
+        'connect': lambda callback: None
+    })()
 
 try:
     import nuke
@@ -23,15 +46,15 @@ except ImportError:
     NUKE_AVAILABLE = False
 
 from ..nuke_integration.context_analyzer import NukeContextAnalyzer
-from ..nuke_integration.script_generator import ScriptGenerator
+from ..nuke_integration.script_generator import NukeScriptGenerator
 from ..nuke_integration.action_applier import ActionApplier
-from ..vfx_knowledge.prompt_engine import PromptEngine
+from ..vfx_knowledge.prompt_engine import VFXPromptEngine
 from ..vfx_knowledge.workflow_database import WorkflowDatabase
 from ..vfx_knowledge.best_practices import BestPracticesEngine
 
-from ...nuke_ai_panel.core.provider_manager import ProviderManager
-from ...nuke_ai_panel.core.config import ConfigManager
-from ...nuke_ai_panel.utils.logger import setup_logger
+from nuke_ai_panel.core.provider_manager import ProviderManager
+from nuke_ai_panel.core.config import Config
+from nuke_ai_panel.utils.logger import setup_logging
 
 from .session_manager import SessionManager
 from .action_engine import ActionEngine
@@ -48,7 +71,58 @@ class AIResponseWorker(QThread):
         self.provider_manager = provider_manager
         self.message = message
         self.context = context
-        self.logger = logging.getLogger(__name__)
+        self.logger = None
+        self._setup_logger()
+    
+    def _setup_logger(self):
+        """Set up logger with robust fallback mechanisms."""
+        try:
+            self.logger = logging.getLogger(__name__)
+            
+            # Ensure logger is properly configured
+            if not self.logger.handlers:
+                handler = logging.StreamHandler()
+                formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                handler.setFormatter(formatter)
+                self.logger.addHandler(handler)
+                self.logger.setLevel(logging.INFO)
+        except Exception:
+            # Fallback: Create a minimal logger
+            try:
+                self.logger = logging.getLogger('ai_worker_fallback')
+                handler = logging.StreamHandler()
+                handler.setFormatter(logging.Formatter('%(levelname)s - %(message)s'))
+                self.logger.addHandler(handler)
+                self.logger.setLevel(logging.INFO)
+            except Exception:
+                # Ultimate fallback: Create mock logger
+                self.logger = type('MockLogger', (), {
+                    'info': lambda msg: print(f"[AI_WORKER_INFO] {msg}"),
+                    'warning': lambda msg: print(f"[AI_WORKER_WARNING] {msg}"),
+                    'error': lambda msg: print(f"[AI_WORKER_ERROR] {msg}"),
+                    'debug': lambda msg: print(f"[AI_WORKER_DEBUG] {msg}"),
+                    'critical': lambda msg: print(f"[AI_WORKER_CRITICAL] {msg}")
+                })()
+        
+        # Final safety check
+        if self.logger is None:
+            self.logger = type('MockLogger', (), {
+                'info': lambda msg: print(f"[AI_WORKER_INFO] {msg}"),
+                'warning': lambda msg: print(f"[AI_WORKER_WARNING] {msg}"),
+                'error': lambda msg: print(f"[AI_WORKER_ERROR] {msg}"),
+                'debug': lambda msg: print(f"[AI_WORKER_DEBUG] {msg}"),
+                'critical': lambda msg: print(f"[AI_WORKER_CRITICAL] {msg}")
+            })()
+    
+    def _safe_log(self, level, message):
+        """Safely log a message with fallback to print if logger fails."""
+        try:
+            if self.logger:
+                getattr(self.logger, level)(message)
+            else:
+                print(f"[AI_WORKER_{level.upper()}] {message}")
+        except Exception:
+            print(f"[AI_WORKER_{level.upper()}] {message}")
         
     def run(self):
         """Execute the AI request in a separate thread."""
@@ -63,7 +137,7 @@ class AIResponseWorker(QThread):
             self.response_ready.emit(response)
             
         except Exception as e:
-            self.logger.error(f"AI response worker failed: {e}")
+            self._safe_log("error", f"AI response worker failed: {e}")
             self.error_occurred.emit(str(e))
 
 
@@ -85,7 +159,10 @@ class PanelManager(QObject):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.logger = setup_logger(__name__)
+        
+        # Initialize logger with robust fallback mechanism
+        self.logger = None
+        self._setup_logger()
         
         # Core components
         self.config_manager = None
@@ -108,39 +185,119 @@ class PanelManager(QObject):
         
         # Initialize components
         self.initialize_components()
+    
+    def _setup_logger(self):
+        """Set up logger with robust fallback mechanisms."""
+        try:
+            # Try to set up global logging first
+            setup_logging()
+            self.logger = logging.getLogger(__name__)
+            
+            # Ensure logger is properly configured
+            if not self.logger.handlers:
+                handler = logging.StreamHandler()
+                formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                handler.setFormatter(formatter)
+                self.logger.addHandler(handler)
+                self.logger.setLevel(logging.INFO)
+                
+        except Exception as e:
+            # Fallback: Create a basic logger if setup_logging fails
+            try:
+                self.logger = logging.getLogger(__name__)
+                if not self.logger.handlers:
+                    handler = logging.StreamHandler()
+                    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                    handler.setFormatter(formatter)
+                    self.logger.addHandler(handler)
+                    self.logger.setLevel(logging.INFO)
+            except Exception as fallback_error:
+                # Ultimate fallback: Create a minimal logger manually
+                try:
+                    self.logger = logging.getLogger('panel_manager_fallback')
+                    handler = logging.StreamHandler()
+                    handler.setFormatter(logging.Formatter('%(levelname)s - %(message)s'))
+                    self.logger.addHandler(handler)
+                    self.logger.setLevel(logging.INFO)
+                    self.logger.error(f"Logger setup failed, using fallback: {fallback_error}")
+                except Exception:
+                    # Absolute final fallback - create minimal logger without error logging
+                    self.logger = logging.getLogger('emergency_logger')
+                    try:
+                        self.logger.addHandler(logging.StreamHandler())
+                        self.logger.setLevel(logging.ERROR)
+                    except Exception:
+                        # If even this fails, create a mock logger
+                        self.logger = type('MockLogger', (), {
+                            'info': lambda msg: print(f"[INFO] {msg}"),
+                            'warning': lambda msg: print(f"[WARNING] {msg}"),
+                            'error': lambda msg: print(f"[ERROR] {msg}"),
+                            'debug': lambda msg: print(f"[DEBUG] {msg}"),
+                            'critical': lambda msg: print(f"[CRITICAL] {msg}")
+                        })()
+        
+        # Final safety check
+        if self.logger is None:
+            # Create absolute minimal mock logger
+            self.logger = type('MockLogger', (), {
+                'info': lambda msg: print(f"[INFO] {msg}"),
+                'warning': lambda msg: print(f"[WARNING] {msg}"),
+                'error': lambda msg: print(f"[ERROR] {msg}"),
+                'debug': lambda msg: print(f"[DEBUG] {msg}"),
+                'critical': lambda msg: print(f"[CRITICAL] {msg}")
+            })()
+    
+    def _safe_log(self, level, message):
+        """Safely log a message with fallback to print if logger fails."""
+        try:
+            if self.logger:
+                getattr(self.logger, level)(message)
+            else:
+                print(f"[{level.upper()}] {message}")
+        except Exception:
+            print(f"[{level.upper()}] {message}")
         
     def initialize_components(self):
         """Initialize all panel manager components."""
         try:
-            self.logger.info("Initializing panel manager components...")
+            self._safe_log("info", "Initializing panel manager components...")
             
             # Core components
-            self.config_manager = ConfigManager()
-            self.provider_manager = ProviderManager(self.config_manager)
+            self.config_manager = Config()
+            self._safe_log("info", "Config manager initialized")
+            
+            # Initialize provider manager with error handling
+            try:
+                self.provider_manager = ProviderManager(self.config_manager)
+                self._safe_log("info", "Provider manager initialized")
+            except Exception as e:
+                self._safe_log("error", f"Failed to initialize provider manager: {e}")
+                # Create a minimal fallback provider manager
+                self.provider_manager = None
             self.session_manager = SessionManager(self)
             self.action_engine = ActionEngine(self)
             
             # Nuke integration components
             if NUKE_AVAILABLE:
                 self.context_analyzer = NukeContextAnalyzer()
-                self.script_generator = ScriptGenerator()
+                self.script_generator = NukeScriptGenerator()
                 self.action_applier = ActionApplier()
             else:
-                self.logger.warning("Nuke not available - integration features disabled")
+                self._safe_log("warning", "Nuke not available - integration features disabled")
                 
             # VFX knowledge components
-            self.prompt_engine = PromptEngine()
+            self.prompt_engine = VFXPromptEngine()
             self.workflow_database = WorkflowDatabase()
             self.best_practices = BestPracticesEngine()
             
             # Connect signals
             self.setup_signal_connections()
             
-            self.logger.info("Panel manager initialized successfully")
+            self._safe_log("info", "Panel manager initialized successfully")
             self.status_changed.emit("Panel manager ready", "success")
             
         except Exception as e:
-            self.logger.error(f"Failed to initialize panel manager: {e}")
+            self._safe_log("error", f"Failed to initialize panel manager: {e}")
             self.status_changed.emit(f"Initialization failed: {e}", "error")
             raise
             
@@ -163,27 +320,102 @@ class PanelManager(QObject):
                 )
                 
         except Exception as e:
-            self.logger.error(f"Failed to setup signal connections: {e}")
+            self._safe_log("error", f"Failed to setup signal connections: {e}")
             
     def get_available_providers(self) -> List[str]:
         """Get list of available AI providers."""
         try:
             if self.provider_manager:
-                return self.provider_manager.get_available_providers()
-            return []
+                # Get all loaded providers, not just authenticated ones
+                all_providers = list(self.provider_manager._providers.keys())
+                if all_providers:
+                    return all_providers
+                else:
+                    # If no providers loaded, return the configured provider names
+                    return list(self.provider_manager.PROVIDER_MODULES.keys())
+            else:
+                self._safe_log("warning", "Provider manager not available")
+                # Return default providers for UI
+                return ["openai", "anthropic", "google", "ollama", "mistral", "openrouter"]
         except Exception as e:
-            self.logger.error(f"Failed to get providers: {e}")
-            return []
+            self._safe_log("error", f"Failed to get providers: {e}")
+            return ["openai", "anthropic", "google", "ollama", "mistral", "openrouter"]  # Fallback for UI
             
     def get_available_models(self, provider_name: str) -> List[str]:
         """Get available models for a provider."""
         try:
             if self.provider_manager:
-                return self.provider_manager.get_available_models(provider_name)
-            return []
+                # Try to get models from provider manager
+                provider_instance = self.provider_manager.get_provider(provider_name)
+                if provider_instance:
+                    # For Ollama, try to fetch models dynamically
+                    if provider_name.lower() == 'ollama':
+                        return self._get_ollama_models_sync(provider_instance)
+                    else:
+                        # For other providers, return default models based on provider type
+                        return self._get_default_models_for_provider(provider_name)
+                else:
+                    return self._get_default_models_for_provider(provider_name)
+            else:
+                return self._get_default_models_for_provider(provider_name)
         except Exception as e:
-            self.logger.error(f"Failed to get models for {provider_name}: {e}")
-            return []
+            self._safe_log("error", f"Failed to get models for {provider_name}: {e}")
+            return self._get_default_models_for_provider(provider_name)
+    
+    def _get_default_models_for_provider(self, provider_name: str) -> List[str]:
+        """Get default models for a provider."""
+        default_models = {
+            "openai": ["gpt-4", "gpt-3.5-turbo", "gpt-4-turbo", "gpt-4o"],
+            "anthropic": ["claude-3-opus", "claude-3-sonnet", "claude-3-haiku"],
+            "google": ["gemini-pro", "gemini-pro-vision", "gemini-1.5-pro"],
+            "ollama": ["llama2", "mistral", "codellama", "vicuna"],
+            "mistral": ["mistral-tiny", "mistral-small", "mistral-medium"],
+            "openrouter": ["openai/gpt-4", "anthropic/claude-3-opus", "google/gemini-pro"]
+        }
+        return default_models.get(provider_name.lower(), ["default-model"])
+    
+    def _get_ollama_models_sync(self, provider_instance) -> List[str]:
+        """Get Ollama models synchronously by running async method."""
+        try:
+            import asyncio
+            
+            # Check if provider is authenticated
+            if not provider_instance._authenticated:
+                # Try to authenticate first
+                try:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    auth_result = loop.run_until_complete(provider_instance.authenticate())
+                    loop.close()
+                    if not auth_result:
+                        self._safe_log("warning", "Ollama authentication failed, using default models")
+                        return self._get_default_models_for_provider("ollama")
+                except Exception as auth_error:
+                    self._safe_log("warning", f"Ollama authentication error: {auth_error}, using default models")
+                    return self._get_default_models_for_provider("ollama")
+            
+            # Try to get models from Ollama API
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                models = loop.run_until_complete(provider_instance.get_models())
+                loop.close()
+                
+                if models:
+                    model_names = [model.name for model in models]
+                    self._safe_log("info", f"Retrieved {len(model_names)} models from Ollama")
+                    return model_names
+                else:
+                    self._safe_log("warning", "No models returned from Ollama, using defaults")
+                    return self._get_default_models_for_provider("ollama")
+                    
+            except Exception as model_error:
+                self._safe_log("warning", f"Failed to fetch Ollama models: {model_error}, using defaults")
+                return self._get_default_models_for_provider("ollama")
+                
+        except Exception as e:
+            self._safe_log("error", f"Error in Ollama model fetching: {e}")
+            return self._get_default_models_for_provider("ollama")
             
     def get_default_provider(self) -> str:
         """Get the default AI provider."""
@@ -192,7 +424,7 @@ class PanelManager(QObject):
                 return self.config_manager.get('default_provider', 'openai')
             return 'openai'
         except Exception as e:
-            self.logger.error(f"Failed to get default provider: {e}")
+            self._safe_log("error", f"Failed to get default provider: {e}")
             return 'openai'
             
     def get_default_model(self, provider_name: str) -> str:
@@ -202,7 +434,7 @@ class PanelManager(QObject):
                 return self.provider_manager.get_default_model(provider_name)
             return ""
         except Exception as e:
-            self.logger.error(f"Failed to get default model: {e}")
+            self._safe_log("error", f"Failed to get default model: {e}")
             return ""
             
     def set_current_provider(self, provider_name: str):
@@ -213,7 +445,7 @@ class PanelManager(QObject):
                 self.provider_changed.emit(provider_name, "")
                 self.status_changed.emit(f"Provider changed to {provider_name}", "info")
         except Exception as e:
-            self.logger.error(f"Failed to set provider: {e}")
+            self._safe_log("error", f"Failed to set provider: {e}")
             self.error_occurred.emit(f"Failed to set provider: {e}")
             
     def set_current_model(self, model_name: str):
@@ -225,7 +457,7 @@ class PanelManager(QObject):
                 self.provider_changed.emit(current_provider, model_name)
                 self.status_changed.emit(f"Model changed to {model_name}", "info")
         except Exception as e:
-            self.logger.error(f"Failed to set model: {e}")
+            self._safe_log("error", f"Failed to set model: {e}")
             self.error_occurred.emit(f"Failed to set model: {e}")
             
     def is_provider_connected(self) -> bool:
@@ -235,7 +467,7 @@ class PanelManager(QObject):
                 return self.provider_manager.is_connected()
             return False
         except Exception as e:
-            self.logger.error(f"Failed to check provider connection: {e}")
+            self._safe_log("error", f"Failed to check provider connection: {e}")
             return False
             
     def send_message(self, message: str):
@@ -263,7 +495,7 @@ class PanelManager(QObject):
             self.start_ai_response(enhanced_message, context)
             
         except Exception as e:
-            self.logger.error(f"Failed to send message: {e}")
+            self._safe_log("error", f"Failed to send message: {e}")
             self.error_occurred.emit(f"Failed to send message: {e}")
             
     def enhance_message_with_knowledge(self, message: str, context: Optional[str] = None) -> str:
@@ -273,18 +505,18 @@ class PanelManager(QObject):
             
             # Add VFX context through prompt engine
             if self.prompt_engine:
-                enhanced_message = self.prompt_engine.enhance_prompt(message, context)
+                enhanced_message = self.prompt_engine.enhance_prompt_with_terminology(message, "general")
                 
             # Add best practices if relevant
             if self.best_practices:
-                practices = self.best_practices.get_relevant_practices(message)
+                practices = self.best_practices.get_applicable_practices(message)
                 if practices:
                     enhanced_message += f"\n\nRelevant best practices: {practices}"
                     
             return enhanced_message
             
         except Exception as e:
-            self.logger.error(f"Failed to enhance message: {e}")
+            self._safe_log("error", f"Failed to enhance message: {e}")
             return message
             
     def start_ai_response(self, message: str, context: Optional[str] = None):
@@ -308,7 +540,7 @@ class PanelManager(QObject):
             self.ai_worker.start()
             
         except Exception as e:
-            self.logger.error(f"Failed to start AI response: {e}")
+            self._safe_log("error", f"Failed to start AI response: {e}")
             self.error_occurred.emit(f"Failed to start AI response: {e}")
             
     def handle_ai_response(self, response: str):
@@ -328,7 +560,7 @@ class PanelManager(QObject):
             self.status_changed.emit("Response received", "success")
             
         except Exception as e:
-            self.logger.error(f"Failed to handle AI response: {e}")
+            self._safe_log("error", f"Failed to handle AI response: {e}")
             self.error_occurred.emit(f"Failed to handle response: {e}")
             
     def handle_ai_error(self, error_message: str):
@@ -343,11 +575,11 @@ class PanelManager(QObject):
             if not NUKE_AVAILABLE or not self.context_analyzer:
                 return None
                 
-            context = self.context_analyzer.get_full_context()
+            context = self.context_analyzer.get_session_context()
             return context
             
         except Exception as e:
-            self.logger.error(f"Failed to get Nuke context: {e}")
+            self._safe_log("error", f"Failed to get Nuke context: {e}")
             return None
             
     def get_available_workflows(self) -> List[Dict[str, Any]]:
@@ -357,7 +589,7 @@ class PanelManager(QObject):
                 return self.workflow_database.get_all_workflows()
             return []
         except Exception as e:
-            self.logger.error(f"Failed to get workflows: {e}")
+            self._safe_log("error", f"Failed to get workflows: {e}")
             return []
             
     def get_chat_history(self) -> List[Dict[str, Any]]:
@@ -367,7 +599,7 @@ class PanelManager(QObject):
                 return self.session_manager.get_history()
             return []
         except Exception as e:
-            self.logger.error(f"Failed to get chat history: {e}")
+            self._safe_log("error", f"Failed to get chat history: {e}")
             return []
             
     def clear_session(self):
@@ -377,7 +609,7 @@ class PanelManager(QObject):
                 self.session_manager.clear_session()
                 self.status_changed.emit("Session cleared", "info")
         except Exception as e:
-            self.logger.error(f"Failed to clear session: {e}")
+            self._safe_log("error", f"Failed to clear session: {e}")
             
     def export_chat_history(self, filename: str):
         """Export chat history to a file."""
@@ -404,27 +636,29 @@ class PanelManager(QObject):
             self.status_changed.emit(f"History exported to {filename}", "success")
             
         except Exception as e:
-            self.logger.error(f"Failed to export chat history: {e}")
+            self._safe_log("error", f"Failed to export chat history: {e}")
             self.error_occurred.emit(f"Export failed: {e}")
             
     def get_config(self) -> Dict[str, Any]:
         """Get current configuration."""
         try:
             if self.config_manager:
-                return self.config_manager.get_all_config()
+                return self.config_manager._config.copy()
             return {}
         except Exception as e:
-            self.logger.error(f"Failed to get config: {e}")
+            self._safe_log("error", f"Failed to get config: {e}")
             return {}
             
     def get_provider_config(self, provider_name: str) -> Dict[str, Any]:
         """Get configuration for a specific provider."""
         try:
             if self.config_manager:
-                return self.config_manager.get_provider_config(provider_name)
+                # Get the raw provider config as a dictionary
+                provider_data = self.config_manager.get(f"providers.{provider_name}", {})
+                return provider_data
             return {}
         except Exception as e:
-            self.logger.error(f"Failed to get provider config: {e}")
+            self._safe_log("error", f"Failed to get provider config: {e}")
             return {}
             
     def update_settings(self, general_settings: Dict[str, Any], provider_settings: Dict[str, Any]):
@@ -437,10 +671,12 @@ class PanelManager(QObject):
                     
                 # Update provider settings
                 for provider, settings in provider_settings.items():
-                    self.config_manager.update_provider_config(provider, settings)
+                    # Update each setting individually
+                    for key, value in settings.items():
+                        self.config_manager.set(f"providers.{provider}.{key}", value)
                     
                 # Save configuration
-                self.config_manager.save_config()
+                self.config_manager.save()
                 
                 # Reinitialize provider manager with new settings
                 if self.provider_manager:
@@ -449,7 +685,7 @@ class PanelManager(QObject):
                 self.status_changed.emit("Settings updated", "success")
                 
         except Exception as e:
-            self.logger.error(f"Failed to update settings: {e}")
+            self._safe_log("error", f"Failed to update settings: {e}")
             self.error_occurred.emit(f"Settings update failed: {e}")
             
     def export_settings(self, filename: str):
@@ -464,7 +700,7 @@ class PanelManager(QObject):
                 self.status_changed.emit(f"Settings exported to {filename}", "success")
                 
         except Exception as e:
-            self.logger.error(f"Failed to export settings: {e}")
+            self._safe_log("error", f"Failed to export settings: {e}")
             self.error_occurred.emit(f"Export failed: {e}")
             
     def import_settings(self, filename: str):
@@ -477,8 +713,7 @@ class PanelManager(QObject):
                 config = json.load(f)
                 
             if self.config_manager:
-                self.config_manager.load_from_dict(config)
-                self.config_manager.save_config()
+                self.config_manager.import_config(config)
                 
                 # Reinitialize components
                 if self.provider_manager:
@@ -487,13 +722,13 @@ class PanelManager(QObject):
                 self.status_changed.emit("Settings imported successfully", "success")
                 
         except Exception as e:
-            self.logger.error(f"Failed to import settings: {e}")
+            self._safe_log("error", f"Failed to import settings: {e}")
             self.error_occurred.emit(f"Import failed: {e}")
             
     def cleanup(self):
         """Clean up resources when panel is closed."""
         try:
-            self.logger.info("Cleaning up panel manager...")
+            self._safe_log("info", "Cleaning up panel manager...")
             
             # Stop AI worker if running
             if self.ai_worker and self.ai_worker.isRunning():
@@ -505,10 +740,13 @@ class PanelManager(QObject):
                 self.session_manager.save_session()
                 
             # Clean up components
-            if self.provider_manager:
-                self.provider_manager.cleanup()
+            if self.provider_manager and hasattr(self.provider_manager, 'cleanup'):
+                try:
+                    self.provider_manager.cleanup()
+                except Exception as cleanup_error:
+                    self._safe_log("error", f"Error during provider manager cleanup: {cleanup_error}")
                 
-            self.logger.info("Panel manager cleanup completed")
+            self._safe_log("info", "Panel manager cleanup completed")
             
         except Exception as e:
-            self.logger.error(f"Error during cleanup: {e}")
+            self._safe_log("error", f"Error during cleanup: {e}")

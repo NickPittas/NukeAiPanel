@@ -440,6 +440,15 @@ class WorkflowDatabase:
         """Get a workflow by ID"""
         return self.workflows.get(workflow_id)
     
+    def get_all_workflows(self) -> List[Workflow]:
+        """
+        Get all available workflows.
+        
+        Returns:
+            List of all workflows in the database
+        """
+        return list(self.workflows.values())
+    
     def search_workflows(self, query: str, category: Optional[WorkflowCategory] = None,
                         complexity: Optional[ComplexityLevel] = None) -> List[Workflow]:
         """

@@ -16,8 +16,30 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 import asyncio
 
-from cryptography.fernet import Fernet
-from cachetools import TTLCache, LRUCache
+# Handle optional dependencies gracefully
+try:
+    from cryptography.fernet import Fernet
+    HAS_CRYPTOGRAPHY = True
+except ImportError:
+    HAS_CRYPTOGRAPHY = False
+    Fernet = None
+
+try:
+    from cachetools import TTLCache, LRUCache
+    HAS_CACHETOOLS = True
+except ImportError:
+    HAS_CACHETOOLS = False
+    # Simple fallback implementations
+    class TTLCache(dict):
+        def __init__(self, maxsize=1000, ttl=3600):
+            super().__init__()
+            self.maxsize = maxsize
+            self.ttl = ttl
+    
+    class LRUCache(dict):
+        def __init__(self, maxsize=1000):
+            super().__init__()
+            self.maxsize = maxsize
 
 from .logger import get_logger
 
@@ -118,6 +140,11 @@ class CacheManager:
     
     def _setup_encryption(self):
         """Set up encryption for persistent cache."""
+        if not HAS_CRYPTOGRAPHY:
+            logger.warning("Cryptography not available, disabling cache encryption")
+            self.encrypt = False
+            return
+            
         key_file = self.cache_dir / "cache.key"
         
         try:

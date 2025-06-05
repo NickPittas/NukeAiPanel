@@ -33,12 +33,12 @@ from .ui.action_preview import ActionPreviewDialog
 
 # Import integration components
 from .nuke_integration.context_analyzer import NukeContextAnalyzer
-from .nuke_integration.script_generator import ScriptGenerator
+from .nuke_integration.script_generator import NukeScriptGenerator
 from .nuke_integration.action_applier import ActionApplier
 from .nuke_integration.node_inspector import NodeInspector
 
 # Import VFX knowledge components
-from .vfx_knowledge.prompt_engine import PromptEngine
+from .vfx_knowledge.prompt_engine import VFXPromptEngine
 from .vfx_knowledge.workflow_database import WorkflowDatabase
 from .vfx_knowledge.best_practices import BestPracticesEngine
 from .vfx_knowledge.node_templates import NodeTemplateManager
@@ -46,18 +46,30 @@ from .vfx_knowledge.node_templates import NodeTemplateManager
 # Setup logging
 def setup_logging(level=logging.INFO):
     """Set up logging for the AI Panel."""
-    logger = logging.getLogger('nuke_ai_panel')
+    # Configure root logger for the package
+    root_logger = logging.getLogger('src')
     
-    if not logger.handlers:
+    if not root_logger.handlers:
         handler = logging.StreamHandler()
         formatter = logging.Formatter(
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
         handler.setFormatter(formatter)
-        logger.addHandler(handler)
-        logger.setLevel(level)
+        root_logger.addHandler(handler)
+        root_logger.setLevel(level)
     
-    return logger
+    # Also configure the main package logger
+    main_logger = logging.getLogger('nuke_ai_panel')
+    if not main_logger.handlers:
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+        handler.setFormatter(formatter)
+        main_logger.addHandler(handler)
+        main_logger.setLevel(level)
+    
+    return main_logger
 
 # Initialize logging
 logger = setup_logging()
@@ -100,7 +112,9 @@ def show_panel():
     """Show the AI Assistant panel."""
     if NUKE_AVAILABLE:
         try:
-            nukescripts.showPanel("com.nukeaipanel.AIAssistant")
+            from .ui.main_panel import NukeAIPanel
+            panel = NukeAIPanel()
+            panel.show()
         except Exception as e:
             logger.error(f"Failed to show panel: {e}")
     else:
@@ -159,13 +173,13 @@ __all__ = [
     'ActionEngine',
     
     # Integration Components
-    'ContextAnalyzer',
-    'ScriptGenerator',
+    'NukeContextAnalyzer',
+    'NukeScriptGenerator',
     'ActionApplier',
     'NodeInspector',
     
     # VFX Knowledge Components
-    'PromptEngine',
+    'VFXPromptEngine',
     'WorkflowDatabase',
     'BestPracticesEngine',
     'NodeTemplateManager',

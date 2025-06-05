@@ -16,8 +16,16 @@ try:
     from PySide6.QtWidgets import QApplication
     from PySide6.QtCore import QTimer
 except ImportError:
-    from PySide2.QtWidgets import QApplication
-    from PySide2.QtCore import QTimer
+    # Create minimal fallback for testing without Qt
+    class QApplication:
+        def __init__(self, args): pass
+        def exec_(self): return 0
+        @staticmethod
+        def instance(): return None
+    
+    class QTimer:
+        @staticmethod
+        def singleShot(interval, callback): callback()
 
 # Import the AI Panel components
 from src.ui.main_panel import NukeAIPanel

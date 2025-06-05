@@ -8,14 +8,86 @@ for the AI chat system, provider selection, and settings management.
 import logging
 from typing import Optional, Dict, Any
 
+# Handle optional Qt dependencies gracefully
 try:
     from PySide6.QtWidgets import *
     from PySide6.QtCore import *
     from PySide6.QtGui import *
+    HAS_QT = True
 except ImportError:
-    from PySide2.QtWidgets import *
-    from PySide2.QtCore import *
-    from PySide2.QtGui import *
+    HAS_QT = False
+    # Create minimal fallback classes for testing
+    class QWidget:
+        def __init__(self, parent=None):
+            pass
+        def setWindowTitle(self, title): pass
+        def setMinimumSize(self, w, h): pass
+        def show(self): pass
+        def style(self): return self
+        def standardIcon(self, icon): return None
+        def setStyleSheet(self, style): pass
+        def closeEvent(self, event): pass
+    
+    class QVBoxLayout:
+        def __init__(self, parent=None): pass
+        def setContentsMargins(self, *args): pass
+        def setSpacing(self, spacing): pass
+        def addWidget(self, widget, stretch=0): pass
+        def addLayout(self, layout): pass
+    
+    class QHBoxLayout:
+        def __init__(self): pass
+        def setContentsMargins(self, *args): pass
+        def addWidget(self, widget): pass
+        def addStretch(self): pass
+        def addLayout(self, layout): pass
+    
+    class QLabel:
+        def __init__(self, text=""): pass
+        def setStyleSheet(self, style): pass
+        def setText(self, text): pass
+        def setToolTip(self, tip): pass
+    
+    class QPushButton:
+        def __init__(self, text=""): pass
+        def setIcon(self, icon): pass
+        def setToolTip(self, tip): pass
+        def setFixedSize(self, w, h): pass
+        def setFixedHeight(self, h): pass
+        def setFlat(self, flat): pass
+        clicked = None
+    
+    class QComboBox:
+        def __init__(self): pass
+        def setMinimumWidth(self, w): pass
+        def clear(self): pass
+        def addItem(self, item): pass
+        def setCurrentText(self, text): pass
+        currentTextChanged = None
+        def blockSignals(self, block): pass
+        def findText(self, text): return -1
+        def setCurrentIndex(self, index): pass
+    
+    class QMessageBox:
+        Yes = 1
+        No = 0
+        @staticmethod
+        def question(*args): return 0
+        @staticmethod
+        def information(*args): pass
+        @staticmethod
+        def warning(*args): pass
+    
+    class QFileDialog:
+        @staticmethod
+        def getSaveFileName(*args): return ("", "")
+    
+    class QDialog:
+        Accepted = 1
+        def exec_(self): return 0
+    
+    class QStyle:
+        SP_ComputerIcon = 1
 
 try:
     import nuke
@@ -40,6 +112,15 @@ class NukeAIPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.logger = logging.getLogger(__name__)
+        
+        # Ensure logger is properly configured
+        if not self.logger.handlers:
+            handler = logging.StreamHandler()
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            handler.setFormatter(formatter)
+            self.logger.addHandler(handler)
+            self.logger.setLevel(logging.INFO)
+        
         self.panel_manager = None
         self.settings_dialog = None
         
@@ -495,7 +576,7 @@ def register_panel():
         # Add to Nuke menu
         nuke.menu('Nuke').addCommand(
             'AI Assistant/Show Panel',
-            'nukescripts.showPanel("com.nukeaipanel.AIAssistant")'
+            'from src.ui.main_panel import NukeAIPanel; panel = NukeAIPanel(); panel.show()'
         )
         
     except Exception as e:

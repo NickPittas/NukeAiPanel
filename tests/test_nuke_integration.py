@@ -16,7 +16,7 @@ nuke_mock.createNode = Mock()
 nuke_mock.delete = Mock()
 nuke_mock.connectNodes = Mock()
 
-# Mock PySide2/Qt components
+# Mock PySide6/Qt components
 pyside_mock = Mock()
 pyside_mock.QtWidgets = Mock()
 pyside_mock.QtCore = Mock()
@@ -24,15 +24,15 @@ pyside_mock.QtGui = Mock()
 
 with patch.dict('sys.modules', {
     'nuke': nuke_mock,
-    'PySide2': pyside_mock,
-    'PySide2.QtWidgets': pyside_mock.QtWidgets,
-    'PySide2.QtCore': pyside_mock.QtCore,
-    'PySide2.QtGui': pyside_mock.QtGui
+    'PySide6': pyside_mock,
+    'PySide6.QtWidgets': pyside_mock.QtWidgets,
+    'PySide6.QtCore': pyside_mock.QtCore,
+    'PySide6.QtGui': pyside_mock.QtGui
 }):
     from src.core.panel_manager import PanelManager
     from src.core.session_manager import SessionManager
     from src.core.action_engine import ActionEngine
-    from src.nuke_integration.context_analyzer import ContextAnalyzer
+    from src.nuke_integration.context_analyzer import NukeContextAnalyzer
     from src.nuke_integration.node_inspector import NodeInspector
     from src.nuke_integration.script_generator import ScriptGenerator
     from src.nuke_integration.action_applier import ActionApplier
@@ -44,7 +44,7 @@ class TestContextAnalyzer:
     @pytest.fixture
     def context_analyzer(self):
         """Create context analyzer for testing."""
-        return ContextAnalyzer()
+        return NukeContextAnalyzer()
     
     def test_analyze_current_script(self, context_analyzer, mock_nuke_context):
         """Test analyzing current Nuke script context."""
@@ -578,7 +578,7 @@ class TestNukeIntegrationEnd2End:
     async def test_complete_workflow(self, mock_nuke_context):
         """Test complete workflow from context analysis to action execution."""
         # 1. Analyze context
-        context_analyzer = ContextAnalyzer()
+        context_analyzer = NukeContextAnalyzer()
         with patch('nuke.selectedNodes', return_value=[]):
             with patch('nuke.allNodes', return_value=[]):
                 context = context_analyzer.analyze_current_script()

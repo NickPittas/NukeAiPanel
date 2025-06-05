@@ -12,19 +12,27 @@ from typing import Callable, Any, Optional, Union, Type, Tuple
 from functools import wraps
 from dataclasses import dataclass
 
-from tenacity import (
-    Retrying,
-    RetryError,
-    stop_after_attempt,
-    stop_after_delay,
-    wait_exponential,
-    wait_fixed,
-    wait_random,
-    retry_if_exception_type,
-    retry_if_result,
-    before_sleep_log,
-    after_log
-)
+# Handle optional tenacity dependency gracefully
+try:
+    from tenacity import (
+        Retrying,
+        RetryError,
+        stop_after_attempt,
+        stop_after_delay,
+        wait_exponential,
+        wait_fixed,
+        wait_random,
+        retry_if_exception_type,
+        retry_if_result,
+        before_sleep_log,
+        after_log
+    )
+    HAS_TENACITY = True
+except ImportError:
+    HAS_TENACITY = False
+    # Define minimal fallback classes if needed
+    class RetryError(Exception):
+        pass
 
 from .logger import get_logger
 from ..core.exceptions import (

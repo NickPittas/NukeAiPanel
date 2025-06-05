@@ -5,9 +5,49 @@ Provides integration with Ollama for running local AI models.
 """
 
 import asyncio
-import aiohttp
 from typing import List, Optional, AsyncGenerator, Dict, Any
 import json
+
+try:
+    import aiohttp
+    HAS_AIOHTTP = True
+except ImportError:
+    HAS_AIOHTTP = False
+    # Create minimal fallback classes
+    class aiohttp:
+        class ClientConnectorError(Exception):
+            pass
+        class ClientError(Exception):
+            pass
+        class ClientTimeout:
+            def __init__(self, total=None):
+                pass
+        class ClientSession:
+            def __init__(self, *args, **kwargs):
+                pass
+            def __aenter__(self):
+                return self
+            def __aexit__(self, *args):
+                pass
+            def get(self, url):
+                return self
+            def post(self, url, json=None):
+                return self
+            async def json(self):
+                return {}
+            async def text(self):
+                return ""
+            @property
+            def status(self):
+                return 404
+            @property
+            def content(self):
+                return []
+            @property
+            def closed(self):
+                return True
+            async def close(self):
+                pass
 
 from ..core.base_provider import (
     BaseProvider,
@@ -46,6 +86,10 @@ class OllamaProvider(BaseProvider):
         """
         super().__init__(name, config)
         
+        # Check if aiohttp library is available
+        if not HAS_AIOHTTP:
+            raise ProviderError(name, "aiohttp library not installed. Install with: pip install aiohttp")
+        
         self.base_url = config.get('base_url', 'http://localhost:11434')
         self.timeout = config.get('timeout', 120)  # Longer timeout for local models
         
@@ -59,11 +103,11 @@ class OllamaProvider(BaseProvider):
         self._session: Optional[aiohttp.ClientSession] = None
     
     async def _get_session(self) -> aiohttp.ClientSession:
-        """Get or create HTTP session."""
+        """Get or create HTTP session with proper resource management."""
         if self._session is None or self._session.closed:
             headers = {'Content-Type': 'application/json'}
             
-            # Add API key if provided
+            # Add API key if provided (optional for Ollama)
             if self.api_key:
                 headers['Authorization'] = f'Bearer {self.api_key}'
             
@@ -75,11 +119,26 @@ class OllamaProvider(BaseProvider):
         
         return self._session
     
+    async def _create_temp_session(self) -> aiohttp.ClientSession:
+        """Create a temporary session for one-time use."""
+        headers = {'Content-Type': 'application/json'}
+        
+        # Add API key if provided (optional for Ollama)
+        if self.api_key:
+            headers['Authorization'] = f'Bearer {self.api_key}'
+        
+        timeout = aiohttp.ClientTimeout(total=self.timeout)
+        return aiohttp.ClientSession(
+            headers=headers,
+            timeout=timeout
+        )
+    
     async def authenticate(self) -> bool:
         """
         Authenticate with Ollama API.
         
-        For Ollama, this mainly checks if the service is running and accessible.
+        For Ollama, this checks if the service is running and accessible.
+        No API key is required for local Ollama instances.
         
         Returns:
             True if authentication successful
@@ -87,28 +146,28 @@ class OllamaProvider(BaseProvider):
         Raises:
             AuthenticationError: If authentication fails
         """
-        try:
-            session = await self._get_session()
-            
-            # Test connection by checking if Ollama is running
-            async with session.get(f'{self.base_url}/api/tags') as response:
-                if response.status == 200:
-                    self._authenticated = True
-                    logger.info("Ollama connection successful")
-                    return True
-                else:
-                    self._authenticated = False
-                    raise AuthenticationError(self.name, f"Ollama not accessible: HTTP {response.status}")
-                    
-        except aiohttp.ClientConnectorError:
-            self._authenticated = False
-            raise AuthenticationError(self.name, "Cannot connect to Ollama. Is Ollama running?")
-        except aiohttp.ClientError as e:
-            self._authenticated = False
-            raise AuthenticationError(self.name, f"Network error: {e}")
-        except Exception as e:
-            self._authenticated = False
-            raise AuthenticationError(self.name, f"Authentication failed: {e}")
+        # Use temporary session with proper context management
+        async with await self._create_temp_session() as session:
+            try:
+                # Test connection by checking if Ollama is running
+                async with session.get(f'{self.base_url}/api/tags') as response:
+                    if response.status == 200:
+                        self._authenticated = True
+                        logger.info(f"Ollama connection successful at {self.base_url}")
+                        return True
+                    else:
+                        self._authenticated = False
+                        raise AuthenticationError(self.name, f"Ollama server not accessible: HTTP {response.status}")
+                        
+            except aiohttp.ClientConnectorError:
+                self._authenticated = False
+                raise AuthenticationError(self.name, f"Cannot connect to Ollama at {self.base_url}. Is Ollama running?")
+            except aiohttp.ClientError as e:
+                self._authenticated = False
+                raise AuthenticationError(self.name, f"Network error connecting to Ollama: {e}")
+            except Exception as e:
+                self._authenticated = False
+                raise AuthenticationError(self.name, f"Ollama connection failed: {e}")
     
     async def get_models(self) -> List[ModelInfo]:
         """
@@ -121,56 +180,121 @@ class OllamaProvider(BaseProvider):
             ProviderError: If unable to fetch models
             AuthenticationError: If not authenticated
         """
-        self._ensure_authenticated()
+        # Try to authenticate if not already authenticated
+        if not self._authenticated:
+            try:
+                await self.authenticate()
+            except Exception as auth_error:
+                logger.warning(f"Ollama authentication failed: {auth_error}")
+                # Return fallback models if authentication fails
+                return self._get_fallback_models()
         
         if self._models_cache:
             return self._models_cache
         
-        try:
-            session = await self._get_session()
-            
-            async with session.get(f'{self.base_url}/api/tags') as response:
-                if response.status != 200:
-                    raise ProviderError(self.name, f"Failed to fetch models: HTTP {response.status}")
-                
-                data = await response.json()
-                models = []
-                
-                for model_data in data.get('models', []):
-                    # Extract model information
-                    model_name = model_data.get('name', '')
-                    model_size = model_data.get('size', 0)
-                    modified_at = model_data.get('modified_at', '')
+        # Use temporary session with proper context management
+        async with await self._create_temp_session() as session:
+            try:
+                async with session.get(f'{self.base_url}/api/tags') as response:
+                    if response.status != 200:
+                        logger.warning(f"Failed to fetch Ollama models: HTTP {response.status}")
+                        return self._get_fallback_models()
                     
-                    # Estimate context window and max tokens based on model name
-                    context_window, max_tokens = self._estimate_model_limits(model_name)
+                    data = await response.json()
+                    models = []
                     
-                    model_info = ModelInfo(
-                        name=model_name,
-                        display_name=model_name.replace(':', ' ').title(),
-                        description=f"Local Ollama model: {model_name}",
-                        max_tokens=max_tokens,
-                        supports_streaming=True,
-                        supports_functions=False,  # Most Ollama models don't support function calling
-                        context_window=context_window,
-                        metadata={
-                            'provider': 'ollama',
-                            'size': model_size,
-                            'modified_at': modified_at,
-                            'digest': model_data.get('digest', ''),
-                            'details': model_data.get('details', {})
-                        }
-                    )
-                    models.append(model_info)
-                
-                self._models_cache = models
-                logger.debug(f"Retrieved {len(models)} Ollama models")
-                return models
-                
-        except aiohttp.ClientError as e:
-            raise ProviderError(self.name, f"Network error fetching models: {e}")
-        except Exception as e:
-            raise ProviderError(self.name, f"Failed to fetch models: {e}")
+                    for model_data in data.get('models', []):
+                        # Extract model information
+                        model_name = model_data.get('name', '')
+                        model_size = model_data.get('size', 0)
+                        modified_at = model_data.get('modified_at', '')
+                        
+                        # Estimate context window and max tokens based on model name
+                        context_window, max_tokens = self._estimate_model_limits(model_name)
+                        
+                        model_info = ModelInfo(
+                            name=model_name,
+                            display_name=model_name.replace(':', ' ').title(),
+                            description=f"Local Ollama model: {model_name}",
+                            max_tokens=max_tokens,
+                            supports_streaming=True,
+                            supports_functions=False,  # Most Ollama models don't support function calling
+                            context_window=context_window,
+                            metadata={
+                                'provider': 'ollama',
+                                'size': model_size,
+                                'modified_at': modified_at,
+                                'digest': model_data.get('digest', ''),
+                                'details': model_data.get('details', {})
+                            }
+                        )
+                        models.append(model_info)
+                    
+                    if models:
+                        self._models_cache = models
+                        logger.debug(f"Retrieved {len(models)} Ollama models")
+                        return models
+                    else:
+                        logger.warning("No models returned from Ollama API, using fallback models")
+                        return self._get_fallback_models()
+                        
+            except aiohttp.ClientConnectorError:
+                logger.warning("Cannot connect to Ollama server, using fallback models")
+                return self._get_fallback_models()
+            except aiohttp.ClientError as e:
+                logger.warning(f"Network error fetching Ollama models: {e}, using fallback models")
+                return self._get_fallback_models()
+            except Exception as e:
+                logger.warning(f"Failed to fetch Ollama models: {e}, using fallback models")
+                return self._get_fallback_models()
+    
+    def _get_fallback_models(self) -> List[ModelInfo]:
+        """Get fallback models when Ollama server is not available."""
+        fallback_models = [
+            ModelInfo(
+                name="llama2",
+                display_name="Llama 2",
+                description="Meta's Llama 2 model (fallback)",
+                max_tokens=2048,
+                supports_streaming=True,
+                supports_functions=False,
+                context_window=4096,
+                metadata={'provider': 'ollama', 'fallback': True}
+            ),
+            ModelInfo(
+                name="mistral",
+                display_name="Mistral",
+                description="Mistral AI model (fallback)",
+                max_tokens=4096,
+                supports_streaming=True,
+                supports_functions=False,
+                context_window=8192,
+                metadata={'provider': 'ollama', 'fallback': True}
+            ),
+            ModelInfo(
+                name="codellama",
+                display_name="Code Llama",
+                description="Meta's Code Llama model (fallback)",
+                max_tokens=8192,
+                supports_streaming=True,
+                supports_functions=False,
+                context_window=16384,
+                metadata={'provider': 'ollama', 'fallback': True}
+            ),
+            ModelInfo(
+                name="vicuna",
+                display_name="Vicuna",
+                description="Vicuna model (fallback)",
+                max_tokens=2048,
+                supports_streaming=True,
+                supports_functions=False,
+                context_window=4096,
+                metadata={'provider': 'ollama', 'fallback': True}
+            )
+        ]
+        
+        logger.info(f"Using {len(fallback_models)} fallback Ollama models")
+        return fallback_models
     
     def _estimate_model_limits(self, model_name: str) -> tuple[int, int]:
         """
@@ -450,43 +574,43 @@ class OllamaProvider(BaseProvider):
         Returns:
             Dictionary with health status information
         """
-        try:
-            session = await self._get_session()
-            
-            async with session.get(f'{self.base_url}/api/tags') as response:
-                if response.status == 200:
-                    data = await response.json()
-                    model_count = len(data.get('models', []))
-                    
-                    return {
-                        'status': 'healthy',
-                        'authenticated': self._authenticated,
-                        'models_available': model_count,
-                        'base_url': self.base_url,
-                        'timestamp': str(asyncio.get_event_loop().time())
-                    }
-                else:
-                    return {
-                        'status': 'unhealthy',
-                        'error': f'HTTP {response.status}',
-                        'authenticated': self._authenticated,
-                        'timestamp': str(asyncio.get_event_loop().time())
-                    }
-                    
-        except aiohttp.ClientConnectorError:
-            return {
-                'status': 'unhealthy',
-                'error': 'Cannot connect to Ollama. Is Ollama running?',
-                'authenticated': self._authenticated,
-                'timestamp': str(asyncio.get_event_loop().time())
-            }
-        except Exception as e:
-            return {
-                'status': 'unhealthy',
-                'error': str(e),
-                'authenticated': self._authenticated,
-                'timestamp': str(asyncio.get_event_loop().time())
-            }
+        # Use temporary session with proper context management
+        async with await self._create_temp_session() as session:
+            try:
+                async with session.get(f'{self.base_url}/api/tags') as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        model_count = len(data.get('models', []))
+                        
+                        return {
+                            'status': 'healthy',
+                            'authenticated': self._authenticated,
+                            'models_available': model_count,
+                            'base_url': self.base_url,
+                            'timestamp': str(asyncio.get_event_loop().time())
+                        }
+                    else:
+                        return {
+                            'status': 'unhealthy',
+                            'error': f'HTTP {response.status}',
+                            'authenticated': self._authenticated,
+                            'timestamp': str(asyncio.get_event_loop().time())
+                        }
+                        
+            except aiohttp.ClientConnectorError:
+                return {
+                    'status': 'unhealthy',
+                    'error': 'Cannot connect to Ollama. Is Ollama running?',
+                    'authenticated': self._authenticated,
+                    'timestamp': str(asyncio.get_event_loop().time())
+                }
+            except Exception as e:
+                return {
+                    'status': 'unhealthy',
+                    'error': str(e),
+                    'authenticated': self._authenticated,
+                    'timestamp': str(asyncio.get_event_loop().time())
+                }
     
     async def __aenter__(self):
         """Async context manager entry."""

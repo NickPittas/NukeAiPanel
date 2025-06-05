@@ -132,20 +132,27 @@ class ProviderManager:
             )
         
         try:
-            # Import provider module
-            module_path = self.PROVIDER_MODULES[provider_name]
-            module = importlib.import_module(module_path)
-            
-            # Get provider class (assumes class name is ProviderNameProvider)
-            class_name = f"{provider_name.title()}Provider"
-            provider_class = getattr(module, class_name)
+            # Use lazy loading to avoid importing dependencies for unused providers
+            from ..providers import get_provider_class
+            provider_class = get_provider_class(provider_name)
             
             # Get provider configuration
             provider_config = self.config.get_provider_config(provider_name)
             auth_config = self.auth_manager.get_provider_config(provider_name)
             
-            # Merge configurations
+            # Merge configurations with proper API key handling
+            # API key loading fix applied
             full_config = {**provider_config.__dict__, **auth_config}
+            
+            # Ensure API key is properly loaded from config
+            if not full_config.get('api_key') and hasattr(provider_config, 'api_key') and provider_config.api_key:
+                full_config['api_key'] = provider_config.api_key
+            
+            # Also check for base_url mapping
+            if hasattr(provider_config, 'base_url') and provider_config.base_url:
+                full_config['base_url'] = provider_config.base_url
+            elif hasattr(provider_config, 'custom_endpoint') and provider_config.custom_endpoint:
+                full_config['base_url'] = provider_config.custom_endpoint
             
             # Create provider instance
             provider = provider_class(provider_name, full_config)
@@ -267,11 +274,15 @@ class ProviderManager:
             provider = self._providers[name]
             status = self._provider_status[name]
             
-            if not status.authenticated:
-                logger.warning(f"Provider {name} not authenticated, skipping model fetch")
-                continue
-            
             try:
+                # Try to authenticate if not already authenticated
+                if not status.authenticated:
+                    try:
+                        await self.authenticate_provider(name)
+                    except Exception as auth_error:
+                        logger.warning(f"Provider {name} authentication failed: {auth_error}")
+                        # Continue anyway to try getting models
+                
                 models = await provider.get_models()
                 results[name] = models
                 
@@ -303,16 +314,18 @@ class ProviderManager:
     
     def get_available_providers(self) -> List[str]:
         """
-        Get list of available (authenticated and healthy) providers.
+        Get list of available providers (including those with loading errors).
         
         Returns:
             List of provider names
         """
-        available = []
+        # Return all loaded providers, regardless of authentication status
+        # This allows the UI to show all providers for configuration
+        available = list(self._providers.keys())
         
-        for name, status in self._provider_status.items():
-            if status.enabled and status.authenticated and status.available:
-                available.append(name)
+        # If no providers are loaded, return all configured provider names
+        if not available:
+            available = list(self.PROVIDER_MODULES.keys())
         
         return available
     
@@ -666,6 +679,108 @@ class ProviderManager:
             'retry_stats': self.retry_manager.get_stats()
         }
     
+    def reload_config(self):
+        """Reload configuration and reinitialize providers."""
+        try:
+            self.logger.info("Reloading provider configuration...")
+            
+            # Reload the configuration
+            if hasattr(self.config, 'load'):
+                self.config.load()
+            
+            # Clear existing providers
+            self._providers.clear()
+            self._provider_status.clear()
+            self._provider_usage.clear()
+            self._provider_errors.clear()
+            
+            # Reinitialize providers with new config
+            self._initialize_providers()
+            
+            self.logger.info("Provider configuration reloaded successfully")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to reload config: {e}")
+            raise ProviderError("config_reload", f"Failed to reload configuration: {e}")
+    
+    def is_connected(self):
+        """Check if the current provider is connected and ready."""
+        try:
+            # Check if we have any available providers
+            available_providers = self.get_available_providers()
+            if not available_providers:
+                return False
+            
+            # Check if at least one provider has valid configuration
+            for provider_name in available_providers:
+                provider_config = self.config.get_provider_config(provider_name)
+                
+                # For Ollama, check server availability instead of API key
+                if provider_name == 'ollama':
+                    # Ollama is considered connected if it's enabled and potentially reachable
+                    if self.config.is_provider_enabled(provider_name):
+                        # Check if we have a provider instance and it's been authenticated
+                        if provider_name in self._providers:
+                            provider_status = self._provider_status.get(provider_name)
+                            if provider_status and provider_status.available:
+                                return True
+                        # If no status yet, consider it potentially connected if enabled
+                        return True
+                # For providers that need API keys, check if they have one
+                elif provider_name in ['openai', 'anthropic', 'google', 'mistral', 'openrouter']:
+                    if hasattr(provider_config, 'api_key') and provider_config.api_key:
+                        return True
+            
+            return False
+            
+        except Exception as e:
+            self.logger.error(f"Error checking connection status: {e}")
+            return False
+    
+    @property
+    def current_provider(self):
+        """Get the current/default provider instance."""
+        try:
+            # Try to get the default provider from config
+            default_provider = getattr(self.config, 'default_provider', None)
+            if default_provider and default_provider in self._providers:
+                return self._providers[default_provider]
+            
+            # Fall back to first available provider
+            available_providers = self.get_available_providers()
+            if available_providers:
+                return self._providers[available_providers[0]]
+            
+            return None
+            
+        except Exception:
+            return None
+    
+    @property
+    def logger(self):
+        """Get the logger instance."""
+        return logger
+    
+    def cleanup(self):
+        """Clean up provider manager resources (synchronous version of shutdown)."""
+        try:
+            logger.info("Cleaning up provider manager...")
+            
+            # Save cache
+            if hasattr(self, 'cache_manager') and self.cache_manager:
+                self.cache_manager.save()
+            
+            # Clear providers
+            if hasattr(self, '_providers'):
+                self._providers.clear()
+            if hasattr(self, '_provider_status'):
+                self._provider_status.clear()
+            
+            logger.info("Provider manager cleanup complete")
+            
+        except Exception as e:
+            logger.error(f"Error during provider manager cleanup: {e}")
+
     async def shutdown(self):
         """Shutdown the provider manager."""
         logger.info("Shutting down provider manager...")
@@ -678,3 +793,104 @@ class ProviderManager:
         self._provider_status.clear()
         
         logger.info("Provider manager shutdown complete")
+    
+    def get_current_provider(self) -> Optional[str]:
+        """Get the name of the current/default provider."""
+        try:
+            # Try to get the default provider from config
+            default_provider = getattr(self.config, 'default_provider', None)
+            if default_provider and default_provider in self._providers:
+                return default_provider
+            
+            # Fall back to first available provider
+            available_providers = self.get_available_providers()
+            if available_providers:
+                return available_providers[0]
+            
+            return None
+            
+        except Exception:
+            return None
+    
+    def set_current_provider(self, provider_name: str):
+        """Set the current provider."""
+        try:
+            if provider_name in self._providers:
+                # Update config with new default provider
+                if hasattr(self.config, 'set'):
+                    self.config.set('default_provider', provider_name)
+                else:
+                    # Fallback: set attribute directly
+                    setattr(self.config, 'default_provider', provider_name)
+                logger.info(f"Set current provider to: {provider_name}")
+            else:
+                raise ProviderError(provider_name, "Provider not found")
+        except Exception as e:
+            logger.error(f"Failed to set current provider: {e}")
+            raise
+    
+    def get_default_model(self, provider_name: str) -> str:
+        """Get the default model for a provider."""
+        try:
+            provider_config = self.config.get_provider_config(provider_name)
+            return getattr(provider_config, 'default_model', '')
+        except Exception:
+            # Return a reasonable default based on provider
+            defaults = {
+                'openai': 'gpt-3.5-turbo',
+                'anthropic': 'claude-3-sonnet',
+                'google': 'gemini-pro',
+                'ollama': 'llama2',
+                'mistral': 'mistral-tiny',
+                'openrouter': 'openai/gpt-3.5-turbo'
+            }
+            return defaults.get(provider_name.lower(), '')
+    
+    def set_current_model(self, model_name: str):
+        """Set the current model for the active provider."""
+        try:
+            current_provider = self.get_current_provider()
+            if current_provider:
+                # Update provider config with new default model
+                if hasattr(self.config, 'set'):
+                    self.config.set(f'providers.{current_provider}.default_model', model_name)
+                logger.info(f"Set current model to: {model_name} for provider: {current_provider}")
+            else:
+                raise ProviderError("selection", "No current provider set")
+        except Exception as e:
+            logger.error(f"Failed to set current model: {e}")
+            raise
+    
+    def generate_response(self, prompt: str) -> str:
+        """Generate a response using the current provider (synchronous wrapper)."""
+        try:
+            import asyncio
+            
+            # Get current provider
+            current_provider = self.get_current_provider()
+            if not current_provider:
+                raise ProviderError("selection", "No current provider available")
+            
+            # Get default model for provider
+            default_model = self.get_default_model(current_provider)
+            if not default_model:
+                raise ProviderError(current_provider, "No default model configured")
+            
+            # Create message
+            from .base_provider import Message, MessageRole
+            messages = [Message(role=MessageRole.USER, content=prompt)]
+            
+            # Run async generation
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                response = loop.run_until_complete(
+                    self.generate_text(messages, default_model, current_provider)
+                )
+                return response.content
+            finally:
+                loop.close()
+                
+        except Exception as e:
+            logger.error(f"Failed to generate response: {e}")
+            raise ProviderError("generation", f"Response generation failed: {e}")

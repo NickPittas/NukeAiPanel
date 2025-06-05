@@ -6,9 +6,49 @@ Provides integration with Mistral AI's models including Mistral 7B, Mixtral, and
 
 import asyncio
 from typing import List, Optional, AsyncGenerator, Dict, Any
-from mistralai.async_client import MistralAsyncClient
-from mistralai.models.chat_completion import ChatMessage
-from mistralai.exceptions import MistralException, MistralAPIException
+
+# Handle different versions of mistralai library
+try:
+    from mistralai.async_client import MistralAsyncClient
+    from mistralai.models.chat_completion import ChatMessage
+    from mistralai.exceptions import MistralException, MistralAPIException
+except ImportError:
+    try:
+        # Try newer mistralai library structure
+        from mistralai import Mistral as MistralAsyncClient
+        from mistralai.models import ChatMessage
+        from mistralai.exceptions import MistralException, MistralAPIException
+    except ImportError:
+        try:
+            # Try alternative import structure
+            from mistralai.client import MistralClient as MistralAsyncClient
+            from mistralai.models import ChatMessage
+            from mistralai.exceptions import MistralException, MistralAPIException
+        except ImportError:
+            # Final fallback - create minimal classes
+            class MistralAsyncClient:
+                def __init__(self, api_key, endpoint=None):
+                    self.api_key = api_key
+                    self.endpoint = endpoint
+                async def list_models(self):
+                    raise ImportError("Mistral library not properly installed")
+                async def chat(self, **kwargs):
+                    raise ImportError("Mistral library not properly installed")
+                async def chat_stream(self, **kwargs):
+                    raise ImportError("Mistral library not properly installed")
+            
+            class ChatMessage:
+                def __init__(self, role, content):
+                    self.role = role
+                    self.content = content
+            
+            class MistralException(Exception):
+                pass
+            
+            class MistralAPIException(Exception):
+                def __init__(self, message, http_status=None):
+                    super().__init__(message)
+                    self.http_status = http_status
 
 from ..core.base_provider import (
     BaseProvider,

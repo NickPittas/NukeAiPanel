@@ -10,9 +10,39 @@ import json
 import base64
 from typing import Dict, Optional, Any
 from pathlib import Path
-from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+# Handle optional cryptography dependency gracefully
+try:
+    from cryptography.fernet import Fernet
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+    HAS_CRYPTOGRAPHY = True
+except ImportError:
+    HAS_CRYPTOGRAPHY = False
+    # Simple fallback - store credentials in plain text with warning
+    class Fernet:
+        @staticmethod
+        def generate_key():
+            return b"fallback_key_no_encryption"
+        
+        def __init__(self, key):
+            pass
+        
+        def encrypt(self, data):
+            return data
+        
+        def decrypt(self, data):
+            return data
+    
+    # Minimal fallbacks for PBKDF2HMAC and hashes
+    class PBKDF2HMAC:
+        def __init__(self, **kwargs):
+            pass
+        def derive(self, password):
+            return password
+    
+    class hashes:
+        class SHA256:
+            pass
 
 from .exceptions import AuthenticationError, ConfigurationError
 from ..utils.logger import get_logger
@@ -52,6 +82,12 @@ class AuthManager:
     
     def _initialize_encryption(self):
         """Initialize or load the encryption key."""
+        if not HAS_CRYPTOGRAPHY:
+            logger.warning("Cryptography not available - credentials will be stored in plain text!")
+            logger.warning("Install 'cryptography' package for secure credential storage")
+            self._fernet = Fernet(b"fallback_key")
+            return
+            
         try:
             if self.key_file.exists():
                 # Load existing key

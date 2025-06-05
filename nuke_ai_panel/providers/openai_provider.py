@@ -6,8 +6,29 @@ Provides integration with OpenAI's GPT models including GPT-4, GPT-3.5, and othe
 
 import asyncio
 from typing import List, Optional, AsyncGenerator, Dict, Any
-import openai
-from openai import AsyncOpenAI
+
+try:
+    import openai
+    from openai import AsyncOpenAI
+    HAS_OPENAI = True
+except ImportError:
+    HAS_OPENAI = False
+    # Create minimal fallback classes
+    class AsyncOpenAI:
+        def __init__(self, *args, **kwargs):
+            pass
+    
+    class openai:
+        class AuthenticationError(Exception):
+            pass
+        class PermissionDeniedError(Exception):
+            pass
+        class RateLimitError(Exception):
+            pass
+        class NotFoundError(Exception):
+            pass
+        class BadRequestError(Exception):
+            pass
 
 from ..core.base_provider import (
     BaseProvider,
@@ -46,6 +67,10 @@ class OpenaiProvider(BaseProvider):
             config: Configuration including API key
         """
         super().__init__(name, config)
+        
+        # Check if OpenAI library is available
+        if not HAS_OPENAI:
+            raise ProviderError(name, "OpenAI library not installed. Install with: pip install openai")
         
         self.api_key = config.get('api_key')
         self.organization = config.get('organization')

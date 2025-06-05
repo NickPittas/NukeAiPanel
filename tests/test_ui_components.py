@@ -7,7 +7,7 @@ from unittest.mock import Mock, AsyncMock, patch, MagicMock, call
 import asyncio
 from typing import List, Dict, Any
 
-# Mock Qt/PySide2 before importing UI components
+# Mock Qt/PySide6 before importing UI components
 qt_mock = Mock()
 qt_mock.QtWidgets = Mock()
 qt_mock.QtCore = Mock()
@@ -53,10 +53,10 @@ nuke_mock = Mock()
 nuke_mock.NUKE_VERSION_STRING = "14.0v5"
 
 with patch.dict('sys.modules', {
-    'PySide2': qt_mock,
-    'PySide2.QtWidgets': qt_mock.QtWidgets,
-    'PySide2.QtCore': qt_mock.QtCore,
-    'PySide2.QtGui': qt_mock.QtGui,
+    'PySide6': qt_mock,
+    'PySide6.QtWidgets': qt_mock.QtWidgets,
+    'PySide6.QtCore': qt_mock.QtCore,
+    'PySide6.QtGui': qt_mock.QtGui,
     'nuke': nuke_mock
 }):
     from src.ui.main_panel import NukeAIPanel

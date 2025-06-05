@@ -10,7 +10,14 @@ import logging.handlers
 import sys
 from pathlib import Path
 from typing import Optional, Dict, Any
-import colorlog
+
+# Try to import colorlog, fall back to standard logging if not available
+try:
+    import colorlog
+    HAS_COLORLOG = True
+except ImportError:
+    colorlog = None
+    HAS_COLORLOG = False
 
 # Global logger cache
 _loggers: Dict[str, logging.Logger] = {}
@@ -66,24 +73,37 @@ def setup_logging(
     # Clear existing handlers
     root_logger.handlers.clear()
     
-    # Set up console handler with colors
+    # Set up console handler with colors (if available)
     if console_logging:
-        console_handler = colorlog.StreamHandler(sys.stdout)
-        console_handler.setLevel(numeric_level)
+        if HAS_COLORLOG:
+            console_handler = colorlog.StreamHandler(sys.stdout)
+            console_handler.setLevel(numeric_level)
+            
+            # Colored format for console
+            console_format = colorlog.ColoredFormatter(
+                "%(log_color)s%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+                log_colors={
+                    'DEBUG': 'cyan',
+                    'INFO': 'green',
+                    'WARNING': 'yellow',
+                    'ERROR': 'red',
+                    'CRITICAL': 'red,bg_white',
+                }
+            )
+            console_handler.setFormatter(console_format)
+        else:
+            # Fallback to standard console handler
+            console_handler = logging.StreamHandler(sys.stdout)
+            console_handler.setLevel(numeric_level)
+            
+            # Standard format for console
+            console_format = logging.Formatter(
+                "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S"
+            )
+            console_handler.setFormatter(console_format)
         
-        # Colored format for console
-        console_format = colorlog.ColoredFormatter(
-            "%(log_color)s%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-            log_colors={
-                'DEBUG': 'cyan',
-                'INFO': 'green',
-                'WARNING': 'yellow',
-                'ERROR': 'red',
-                'CRITICAL': 'red,bg_white',
-            }
-        )
-        console_handler.setFormatter(console_format)
         root_logger.addHandler(console_handler)
     
     # Set up file handler with rotation
