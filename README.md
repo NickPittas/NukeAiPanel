@@ -30,11 +30,13 @@ A comprehensive AI-powered panel integration for Nuke compositing software with 
 
 ## 📋 Requirements
 
-- **Python**: 3.8 or higher
+- **Python**: 3.8 or higher (3.8-3.12 recommended for best compatibility)
 - **Nuke**: 13.0 or higher (for Nuke-specific features)
 - **Operating System**: Windows, macOS, or Linux
 - **Memory**: Minimum 4GB RAM (8GB recommended)
 - **Storage**: 1GB free space for installation and cache
+
+> **Note for Python 3.13+ Users**: If you're using Python 3.13 or newer, you may encounter issues installing numpy. We've included special handling for this - see [NUMPY_INSTALLATION_FIX.md](docs/NUMPY_INSTALLATION_FIX.md) for details.
 
 ## 🔧 Installation
 
@@ -52,6 +54,9 @@ pip install -e .
 
 # Install dependencies
 pip install -r requirements.txt
+
+# If using Python 3.13+ and encounter numpy installation issues
+python fix_numpy_installation.py
 ```
 
 ### Nuke Integration
@@ -180,6 +185,7 @@ See [config/](config/) directory for configuration templates:
 - **[Installation Guide](INSTALLATION.md)**: Step-by-step setup instructions
 - **[API Reference](API_REFERENCE.md)**: Complete API documentation
 - **[Troubleshooting](TROUBLESHOOTING.md)**: Common issues and solutions
+- **[Numpy Installation Fix](docs/NUMPY_INSTALLATION_FIX.md)**: Fix for Python 3.13+ numpy issues
 - **[Examples](examples/)**: Code examples and use cases
 
 ## 🧪 Testing

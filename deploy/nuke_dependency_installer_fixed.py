@@ -90,15 +90,26 @@ def test_import(import_statement: str) -> bool:
     except Exception:
         return False
 
-def install_package(package: str, python_exe: str = None) -> bool:
+def install_package(package: str, python_exe: str = None, use_binary: bool = False) -> bool:
     """Install a package using pip."""
     if python_exe is None:
         python_exe = get_python_executable()
     
+    # Special handling for numpy on Python 3.13+
+    if package.startswith('numpy') and sys.version_info >= (3, 13):
+        return install_numpy_special(package, python_exe)
+    
     try:
         print(f"  Installing {package}...")
+        cmd = [python_exe, '-m', 'pip', 'install']
+        
+        if use_binary:
+            cmd.append('--only-binary=:all:')
+            
+        cmd.append(package)
+        
         result = subprocess.run(
-            [python_exe, '-m', 'pip', 'install', package],
+            cmd,
             capture_output=True,
             text=True,
             check=True
@@ -109,6 +120,81 @@ def install_package(package: str, python_exe: str = None) -> bool:
         print(f"  ❌ Failed to install {package}")
         print(f"     Error: {e.stderr}")
         return False
+    except Exception as e:
+        print(f"  ❌ Failed to install {package}: {e}")
+        return False
+
+def install_numpy_special(package: str, python_exe: str = None) -> bool:
+    """Special handling for numpy installation on Python 3.13+."""
+    if python_exe is None:
+        python_exe = get_python_executable()
+    
+    print(f"  Special handling for numpy on Python {sys.version_info.major}.{sys.version_info.minor}...")
+    
+    # First try to update setuptools and wheel
+    try:
+        print("  Updating setuptools and wheel...")
+        subprocess.run(
+            [python_exe, '-m', 'pip', 'install', '--upgrade', 'setuptools', 'wheel'],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+    except Exception as e:
+        print(f"  ⚠️ Failed to update setuptools: {e}")
+    
+    # Try binary installation first
+    try:
+        print("  Attempting to install numpy using pre-built wheel...")
+        result = subprocess.run(
+            [python_exe, '-m', 'pip', 'install', '--only-binary=:all:', package],
+            capture_output=True,
+            text=True,
+            check=False
+        )
+        
+        if result.returncode == 0:
+            print(f"  ✅ {package} installed successfully using pre-built wheel")
+            return True
+    except Exception as e:
+        print(f"  ⚠️ Error trying wheel installation: {e}")
+    
+    # Try different numpy versions
+    versions = ["1.26.4", "1.25.2", "1.24.4", "1.23.5"]
+    
+    for version in versions:
+        try:
+            print(f"  Trying numpy=={version} with binary wheel...")
+            result = subprocess.run(
+                [python_exe, '-m', 'pip', 'install', '--only-binary=:all:', f"numpy=={version}"],
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            
+            if result.returncode == 0:
+                print(f"  ✅ numpy=={version} installed successfully")
+                return True
+        except Exception:
+            pass
+    
+    # Last resort: try source installation
+    try:
+        print("  Attempting to install numpy from source...")
+        result = subprocess.run(
+            [python_exe, '-m', 'pip', 'install', package],
+            capture_output=True,
+            text=True,
+            check=False
+        )
+        
+        if result.returncode == 0:
+            print(f"  ✅ {package} installed successfully from source")
+            return True
+        else:
+            print(f"  ❌ Failed to install {package}")
+            print(f"     Error: {result.stderr}")
+            return False
     except Exception as e:
         print(f"  ❌ Failed to install {package}: {e}")
         return False
@@ -209,8 +295,14 @@ def install_provider(provider: str) -> bool:
     
     success = True
     for package in config['packages']:
-        if not install_package(package):
-            success = False
+        # Try binary installation first for packages that might need compilation
+        if package in ['numpy', 'pandas']:
+            if not install_package(package, use_binary=True):
+                if not install_package(package):
+                    success = False
+        else:
+            if not install_package(package):
+                success = False
     
     if success:
         print(f"\n✅ {provider.upper()} installation completed!")

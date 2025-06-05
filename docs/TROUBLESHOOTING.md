@@ -5,6 +5,10 @@ Common issues and solutions for the Nuke AI Panel system.
 ## Table of Contents
 
 - [Installation Issues](#installation-issues)
+  - [Python Import Errors](#python-import-errors)
+  - [Numpy Installation Issues on Python 3.13+](#numpy-installation-issues-on-python-313)
+  - [Dependency Conflicts](#dependency-conflicts)
+  - [Permission Errors](#permission-errors)
 - [Authentication Problems](#authentication-problems)
 - [Provider Connection Issues](#provider-connection-issues)
 - [Nuke Integration Problems](#nuke-integration-problems)
@@ -36,6 +40,33 @@ python -c "import sys; print('\n'.join(sys.path))"
 # Add to Python path if needed
 export PYTHONPATH="${PYTHONPATH}:/path/to/nuke-ai-panel"
 ```
+
+### Numpy Installation Issues on Python 3.13+
+
+**Problem:** Error "Cannot import 'setuptools.build_meta'" when installing numpy on Python 3.13+
+
+**Symptoms:**
+```
+ERROR: Could not build wheels for numpy, which is required to install pyproject.toml-based projects
+ERROR: pip's dependency resolver does not currently take into account all the packages that are installed.
+```
+
+**Solutions:**
+```bash
+# Use the dedicated fix script
+python fix_numpy_installation.py
+
+# Or update setuptools and use binary wheels
+pip install --upgrade setuptools wheel
+pip install --only-binary=:all: numpy==1.24.4
+
+# Try alternative numpy versions if needed
+pip install --only-binary=:all: numpy==1.26.4
+pip install --only-binary=:all: numpy==1.25.2
+```
+
+**Additional Information:**
+See [NUMPY_INSTALLATION_FIX.md](NUMPY_INSTALLATION_FIX.md) for detailed instructions and more solutions.
 
 ### Dependency Conflicts
 

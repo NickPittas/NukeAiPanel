@@ -165,10 +165,10 @@ if __name__ == "__main__":
         print("\\n❌ API key loading test failed!")
 '''
     
-    with open('test_api_key_loading.py', 'w', encoding='utf-8') as f:
+    with open('tests/test_api_key_loading.py', 'w', encoding='utf-8') as f:
         f.write(test_script)
-    
-    print("✅ Created test_api_key_loading.py")
+
+    print("✅ Created tests/test_api_key_loading.py")
 
 def main():
     """Apply all API key loading fixes."""
@@ -189,7 +189,7 @@ def main():
     
     print("\\n🎯 NEXT STEPS:")
     print("1. Install dependencies: python install_dependencies.py")
-    print("2. Test API key loading: python test_api_key_loading.py")
+    print("2. Test API key loading: python tests/test_api_key_loading.py")
     print("3. Configure API keys in settings dialog")
     print("4. Test provider connections")
 

@@ -40,11 +40,11 @@ TEST_CASES = {
 
 def run_test_script():
     """Run the main test script."""
-    logger.info("Running test_model_mapping_fixes.py")
+    logger.info("Running tests/test_model_mapping_fixes.py")
     
     try:
         result = subprocess.run(
-            [sys.executable, "test_model_mapping_fixes.py"],
+            [sys.executable, "tests/test_model_mapping_fixes.py"],
             capture_output=True,
             text=True,
             check=False

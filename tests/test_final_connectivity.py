@@ -231,10 +231,10 @@ Navigate to the "Providers" tab and configure your desired AI providers:
 Enjoy your AI-powered Nuke workflow! 🎬✨
 '''
     
-    with open('USER_CONFIGURATION_GUIDE.md', 'w', encoding='utf-8') as f:
+    with open('docs/USER_CONFIGURATION_GUIDE.md', 'w', encoding='utf-8') as f:
         f.write(guide)
-    
-    print("  ✅ Created USER_CONFIGURATION_GUIDE.md")
+
+    print("  ✅ Created docs/USER_CONFIGURATION_GUIDE.md")
 
 def main():
     """Run all final connectivity tests."""
@@ -265,7 +265,7 @@ def main():
         print("1. Configure API keys in settings dialog")
         print("2. Test provider connections")
         print("3. Start using the AI assistant")
-        print("\n📖 See USER_CONFIGURATION_GUIDE.md for detailed instructions")
+        print("\n📖 See docs/USER_CONFIGURATION_GUIDE.md for detailed instructions")
     else:
         print("\n⚠️  Some issues remain - check individual test results above")
     

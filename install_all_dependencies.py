@@ -121,10 +121,11 @@ OPTIONAL_DEPENDENCIES = {
         'required': False
     },
     'data_processing': {
-        'packages': ['numpy==1.24.4', 'pandas==2.1.4'],
+        'packages': ['pandas==2.1.4'],  # numpy handled separately
         'description': 'Data processing libraries for advanced features (requires C compiler)',
         'required': False,
-        'compiler_required': True
+        'compiler_required': True,
+        'special_handling': True
     },
     'logging': {
         'packages': ['structlog==23.2.0', 'rich==13.7.0'],
@@ -316,6 +317,46 @@ def install_dependency_group(group_name: str, config: Dict[str, Any], upgrade: b
             })
             results['success_count'] += 1
             continue
+        
+        # Special handling for numpy on Python 3.13+
+        if package.startswith('numpy') and sys.version_info >= (3, 13):
+            try:
+                print_info(f"Detected Python {sys.version_info.major}.{sys.version_info.minor} - using special numpy installer...")
+                
+                # Use the fix_numpy_installation.py script
+                numpy_version = package.split('==')[1] if '==' in package else None
+                version_arg = f"--version {numpy_version}" if numpy_version else ""
+                
+                fix_script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fix_numpy_installation.py")
+                if not os.path.exists(fix_script_path):
+                    print_status(f"Could not find fix_numpy_installation.py at {fix_script_path}", success=False)
+                    fix_script_path = "fix_numpy_installation.py"  # Try in current directory
+                
+                cmd = f"{sys.executable} {fix_script_path} {version_arg}"
+                print_info(f"Running: {cmd}")
+                
+                result = subprocess.run(
+                    cmd,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    check=False
+                )
+                
+                if result.returncode == 0:
+                    print_status(f"{package} installed successfully using fix script")
+                    results['packages'].append({
+                        'package': package,
+                        'success': True,
+                        'output': result.stdout
+                    })
+                    results['success_count'] += 1
+                    continue
+                else:
+                    print_status(f"Failed to install {package} using fix script", success=False)
+                    print_status(f"Error: {result.stderr}", success=False)
+            except Exception as e:
+                print_status(f"Error using numpy fix script: {e}", success=False)
         
         # For packages that might need compilation, try to use wheels first
         if config.get('compiler_required', False):
@@ -565,7 +606,7 @@ def print_summary(installation_results: Dict[str, Any], verification_results: Di
     print_subheader("NEXT STEPS")
     print_info("1. Configure API keys for each provider")
     print_info("2. Test the Nuke AI Panel integration")
-    print_info("3. Refer to the INSTALLATION_GUIDE.md for detailed instructions")
+    print_info("3. Refer to the docs/INSTALLATION_GUIDE.md for detailed instructions")
     
     # Print troubleshooting tips if there were failures
     if not total_success:
@@ -657,6 +698,38 @@ Examples:
     # Install optional dependencies if not skipped
     if not args.skip_optional:
         installation_results['optional'] = {}
+        
+        # Special handling for numpy if Python 3.13+
+        if sys.version_info >= (3, 13) and 'data_processing' in OPTIONAL_DEPENDENCIES:
+            print_subheader("Installing numpy with special handling for Python 3.13+")
+            
+            try:
+                # Use the fix_numpy_installation.py script
+                fix_script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fix_numpy_installation.py")
+                if not os.path.exists(fix_script_path):
+                    print_status(f"Could not find fix_numpy_installation.py at {fix_script_path}", success=False)
+                    fix_script_path = "fix_numpy_installation.py"  # Try in current directory
+                
+                cmd = f"{sys.executable} {fix_script_path} --version 1.24.4"
+                print_info(f"Running: {cmd}")
+                
+                result = subprocess.run(
+                    cmd,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    check=False
+                )
+                
+                if result.returncode == 0:
+                    print_status("numpy installed successfully using fix script")
+                else:
+                    print_status("Failed to install numpy using fix script", success=False)
+                    print_status(f"Error: {result.stderr}", success=False)
+            except Exception as e:
+                print_status(f"Error using numpy fix script: {e}", success=False)
+        
+        # Install other optional dependencies
         for group, config in OPTIONAL_DEPENDENCIES.items():
             group_results = install_dependency_group(group, config, upgrade=args.upgrade)
             installation_results['optional'][group] = group_results
@@ -677,7 +750,7 @@ Examples:
     
     print_header("INSTALLATION COMPLETE")
     print_info("Thank you for installing the Nuke AI Panel dependencies!")
-    print_info("For more information, please refer to the INSTALLATION_GUIDE.md")
+    print_info("For more information, please refer to the docs/INSTALLATION_GUIDE.md")
 
 if __name__ == "__main__":
     try:

@@ -154,21 +154,93 @@ class NukeAIPanelInstaller:
         
         try:
             requirements_file = self.project_root / "requirements.txt"
-            if requirements_file.exists():
-                cmd = [sys.executable, "-m", "pip", "install", "-r", str(requirements_file)]
+            if not requirements_file.exists():
+                print("⚠️  requirements.txt not found, skipping dependency installation")
+                return True
+            
+            # Check if we're on Python 3.13+ for special numpy handling
+            is_py313_plus = sys.version_info >= (3, 13)
+            if is_py313_plus:
+                print("⚠️  Detected Python 3.13+ - using special installation method for numpy")
+                
+                # Install dependencies excluding numpy
+                with open(requirements_file, 'r') as f:
+                    requirements = f.readlines()
+                
+                temp_requirements = []
+                has_numpy = False
+                
+                for req in requirements:
+                    req = req.strip()
+                    if req and not req.startswith('#'):
+                        if req.startswith('numpy'):
+                            has_numpy = True
+                        else:
+                            temp_requirements.append(req)
+                
+                # Create temporary requirements file without numpy
+                temp_req_file = self.project_root / "temp_requirements.txt"
+                with open(temp_req_file, 'w') as f:
+                    f.write('\n'.join(temp_requirements))
+                
+                # Install other dependencies
+                cmd = [sys.executable, "-m", "pip", "install", "-r", str(temp_req_file)]
                 result = subprocess.run(cmd, capture_output=True, text=True)
                 
-                if result.returncode == 0:
-                    print("✅ Dependencies installed successfully")
-                    self.installed_components.append("dependencies")
-                    return True
-                else:
+                # Clean up temp file
+                temp_req_file.unlink()
+                
+                if result.returncode != 0:
                     print(f"❌ Failed to install dependencies: {result.stderr}")
                     self.failed_components.append("dependencies")
                     return False
+                
+                # Install numpy using special method if needed
+                if has_numpy:
+                    print("📦 Installing numpy with special handling...")
+                    
+                    # Try to use fix_numpy_installation.py if available
+                    fix_script_path = self.project_root / "fix_numpy_installation.py"
+                    if fix_script_path.exists():
+                        print("🔧 Using fix_numpy_installation.py script")
+                        cmd = [sys.executable, str(fix_script_path), "--version", "1.24.4"]
+                        result = subprocess.run(cmd, capture_output=True, text=True)
+                        
+                        if result.returncode != 0:
+                            print(f"⚠️  Numpy installation with fix script failed: {result.stderr}")
+                            print("🔄 Trying alternative methods...")
+                    
+                    # Try binary installation
+                    try:
+                        print("🔍 Trying binary installation of numpy...")
+                        cmd = [sys.executable, "-m", "pip", "install", "--only-binary=:all:", "numpy==1.24.4"]
+                        result = subprocess.run(cmd, capture_output=True, text=True)
+                        
+                        if result.returncode != 0:
+                            # Try different numpy versions
+                            for version in ["1.26.4", "1.25.2", "1.24.4", "1.23.5"]:
+                                print(f"🔍 Trying numpy=={version}...")
+                                cmd = [sys.executable, "-m", "pip", "install", "--only-binary=:all:", f"numpy=={version}"]
+                                result = subprocess.run(cmd, capture_output=True, text=True)
+                                
+                                if result.returncode == 0:
+                                    print(f"✅ numpy=={version} installed successfully")
+                                    break
+                    except Exception as e:
+                        print(f"⚠️  Error during numpy installation: {e}")
             else:
-                print("⚠️  requirements.txt not found, skipping dependency installation")
-                return True
+                # Standard installation for Python < 3.13
+                cmd = [sys.executable, "-m", "pip", "install", "-r", str(requirements_file)]
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                
+                if result.returncode != 0:
+                    print(f"❌ Failed to install dependencies: {result.stderr}")
+                    self.failed_components.append("dependencies")
+                    return False
+            
+            print("✅ Dependencies installed successfully")
+            self.installed_components.append("dependencies")
+            return True
                 
         except Exception as e:
             print(f"❌ Error installing dependencies: {e}")
@@ -460,9 +532,9 @@ Categories=Graphics;
             print("   2. Configure API keys")
         
         print("\n📖 Documentation:")
-        print("   • Installation guide: INSTALLATION.md")
-        print("   • API reference: API_REFERENCE.md")
-        print("   • Troubleshooting: TROUBLESHOOTING.md")
+        print("   • Installation guide: docs/INSTALLATION.md")
+        print("   • API reference: docs/API_REFERENCE.md")
+        print("   • Troubleshooting: docs/TROUBLESHOOTING.md")
         
         if self.failed_components:
             print(f"\n⚠️  Some components failed to install.")
