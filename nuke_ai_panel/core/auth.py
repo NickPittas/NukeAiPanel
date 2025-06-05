@@ -257,7 +257,7 @@ class AuthManager:
             'anthropic': lambda key: key.startswith('sk-ant-') and len(key) > 20,
             'google': lambda key: len(key) > 20,  # Google API keys vary in format
             'openrouter': lambda key: key.startswith('sk-or-') and len(key) > 20,
-            'mistral': lambda key: len(key) > 20,  # Mistral keys vary in format
+            'mistral': lambda key: key.startswith('') and len(key) > 30,  # Mistral keys are typically long
             'ollama': lambda key: True,  # Ollama might not require API keys for local
         }
         

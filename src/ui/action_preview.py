@@ -97,10 +97,19 @@ except ImportError:
         Bold = 1
         def __init__(self, family, size): pass
     
-    class QRegExp:
+    class QRegularExpression:
         def __init__(self, pattern): pass
-        def indexIn(self, text, start=0): return -1
-        def matchedLength(self): return 0
+        def match(self, text, offset=0):
+            return type('Match', (), {'hasMatch': lambda: False, 'capturedLength': lambda: 0})()
+        def globalMatch(self, text):
+            return type('MatchIterator', (), {
+                'hasNext': lambda: False,
+                'next': lambda: type('Match', (), {
+                    'hasMatch': lambda: False,
+                    'capturedStart': lambda: 0,
+                    'capturedLength': lambda: 0
+                })()
+            })()
     
     class QApplication:
         @staticmethod
@@ -157,7 +166,7 @@ class CodeHighlighter(QSyntaxHighlighter):
         ]
         
         for pattern in keywords:
-            self.highlighting_rules.append((QRegExp(pattern), keyword_format))
+            self.highlighting_rules.append((QRegularExpression(pattern), keyword_format))
             
         # Nuke-specific keywords
         nuke_format = QTextCharFormat()
@@ -169,35 +178,36 @@ class CodeHighlighter(QSyntaxHighlighter):
         ]
         
         for pattern in nuke_patterns:
-            self.highlighting_rules.append((QRegExp(pattern), nuke_format))
+            self.highlighting_rules.append((QRegularExpression(pattern), nuke_format))
             
         # Strings
         string_format = QTextCharFormat()
         string_format.setForeground(QColor("#CE9178"))
-        self.highlighting_rules.append((QRegExp("\".*\""), string_format))
-        self.highlighting_rules.append((QRegExp("'.*'"), string_format))
+        self.highlighting_rules.append((QRegularExpression("\".*\""), string_format))
+        self.highlighting_rules.append((QRegularExpression("'.*'"), string_format))
         
         # Comments
         comment_format = QTextCharFormat()
         comment_format.setForeground(QColor("#6A9955"))
         comment_format.setFontItalic(True)
-        self.highlighting_rules.append((QRegExp("#[^\n]*"), comment_format))
+        self.highlighting_rules.append((QRegularExpression("#[^\n]*"), comment_format))
         
         # Numbers
         number_format = QTextCharFormat()
         number_format.setForeground(QColor("#B5CEA8"))
-        self.highlighting_rules.append((QRegExp("\\b[0-9]+\\.?[0-9]*\\b"), number_format))
+        self.highlighting_rules.append((QRegularExpression("\\b[0-9]+\\.?[0-9]*\\b"), number_format))
         
     def highlightBlock(self, text):
         """Apply highlighting to a block of text."""
         for pattern, format in self.highlighting_rules:
-            expression = QRegExp(pattern)
-            index = expression.indexIn(text)
+            match_iterator = pattern.globalMatch(text)
             
-            while index >= 0:
-                length = expression.matchedLength()
-                self.setFormat(index, length, format)
-                index = expression.indexIn(text, index + length)
+            while match_iterator.hasNext():
+                match = match_iterator.next()
+                if match.hasMatch():
+                    start = match.capturedStart()
+                    length = match.capturedLength()
+                    self.setFormat(start, length, format)
 
 
 class ActionAnalyzer:

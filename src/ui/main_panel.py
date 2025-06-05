@@ -357,6 +357,11 @@ class NukeAIPanel(QWidget):
             return
             
         try:
+            self.logger.info(f"Provider changed to: {provider_name}")
+            
+            # Block signals to prevent recursive calls
+            self.provider_combo.blockSignals(True)
+            
             # Update panel manager
             self.panel_manager.set_current_provider(provider_name)
             
@@ -366,9 +371,15 @@ class NukeAIPanel(QWidget):
             # Update status
             self.update_connection_status()
             
+            # Unblock signals
+            self.provider_combo.blockSignals(False)
+            
         except Exception as e:
             self.logger.error(f"Failed to change provider: {e}")
             self.handle_error(f"Provider change failed: {e}")
+            # Unblock signals even if there's an error
+            if hasattr(self.provider_combo, 'blockSignals'):
+                self.provider_combo.blockSignals(False)
             
     def load_models(self, provider_name: str):
         """Load available models for the selected provider."""

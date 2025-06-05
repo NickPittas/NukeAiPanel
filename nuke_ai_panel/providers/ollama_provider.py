@@ -49,6 +49,8 @@ except ImportError:
             async def close(self):
                 pass
 
+from ..utils.event_loop_manager import get_event_loop_manager
+
 from ..core.base_provider import (
     BaseProvider,
     Message,
@@ -91,7 +93,11 @@ class OllamaProvider(BaseProvider):
             raise ProviderError(name, "aiohttp library not installed. Install with: pip install aiohttp")
         
         self.base_url = config.get('base_url', 'http://localhost:11434')
-        self.timeout = config.get('timeout', 120)  # Longer timeout for local models
+        
+        # Set timeout based on configuration or use model-specific defaults
+        self.default_timeout = config.get('timeout', 120)  # Default timeout for most models
+        self.large_model_timeout = config.get('large_model_timeout', 300)  # 5 minutes for large models
+        self.timeout = self.default_timeout  # Initial timeout value
         
         # Ollama typically doesn't require API keys for local usage
         self.api_key = config.get('api_key')  # Optional
@@ -111,11 +117,25 @@ class OllamaProvider(BaseProvider):
             if self.api_key:
                 headers['Authorization'] = f'Bearer {self.api_key}'
             
-            timeout = aiohttp.ClientTimeout(total=self.timeout)
+            # Use connector with proper cleanup settings
+            # Note: keepalive_timeout cannot be used with force_close=True
+            connector = aiohttp.TCPConnector(
+                limit=10,
+                limit_per_host=5,
+                enable_cleanup_closed=True,
+                force_close=True
+            )
             self._session = aiohttp.ClientSession(
                 headers=headers,
-                timeout=timeout
+                connector=connector
             )
+            
+            # Add provider name attribute for better tracking
+            self._session._provider_name = self.name
+            
+            # Register the session with the event loop manager
+            from ..utils.event_loop_manager import register_session
+            register_session(self._session, self.name)
         
         return self._session
     
@@ -127,11 +147,27 @@ class OllamaProvider(BaseProvider):
         if self.api_key:
             headers['Authorization'] = f'Bearer {self.api_key}'
         
-        timeout = aiohttp.ClientTimeout(total=self.timeout)
-        return aiohttp.ClientSession(
-            headers=headers,
-            timeout=timeout
+        # Use connector with proper cleanup settings
+        # Note: keepalive_timeout cannot be used with force_close=True
+        connector = aiohttp.TCPConnector(
+            limit=10,
+            limit_per_host=5,
+            enable_cleanup_closed=True,
+            force_close=True
         )
+        session = aiohttp.ClientSession(
+            headers=headers,
+            connector=connector
+        )
+        
+        # Add provider name attribute for better tracking
+        session._provider_name = f"{self.name}-temp"
+        
+        # Register the session with the event loop manager
+        from ..utils.event_loop_manager import register_session
+        register_session(session, f"{self.name}-temp")
+        
+        return session
     
     async def authenticate(self) -> bool:
         """
@@ -146,28 +182,44 @@ class OllamaProvider(BaseProvider):
         Raises:
             AuthenticationError: If authentication fails
         """
-        # Use temporary session with proper context management
-        async with await self._create_temp_session() as session:
-            try:
-                # Test connection by checking if Ollama is running
-                async with session.get(f'{self.base_url}/api/tags') as response:
-                    if response.status == 200:
-                        self._authenticated = True
-                        logger.info(f"Ollama connection successful at {self.base_url}")
-                        return True
-                    else:
-                        self._authenticated = False
-                        raise AuthenticationError(self.name, f"Ollama server not accessible: HTTP {response.status}")
-                        
-            except aiohttp.ClientConnectorError:
-                self._authenticated = False
-                raise AuthenticationError(self.name, f"Cannot connect to Ollama at {self.base_url}. Is Ollama running?")
-            except aiohttp.ClientError as e:
-                self._authenticated = False
-                raise AuthenticationError(self.name, f"Network error connecting to Ollama: {e}")
-            except Exception as e:
-                self._authenticated = False
-                raise AuthenticationError(self.name, f"Ollama connection failed: {e}")
+        session = None
+        try:
+            # Create temporary session with proper cleanup
+            session = await self._create_temp_session()
+            
+            # Use asyncio.wait_for for timeout instead of ClientTimeout
+            response = await asyncio.wait_for(
+                session.get(f'{self.base_url}/api/tags'),
+                timeout=self.timeout
+            )
+            async with response:
+                if response.status == 200:
+                    self._authenticated = True
+                    logger.info(f"Ollama connection successful at {self.base_url}")
+                    return True
+                else:
+                    self._authenticated = False
+                    raise AuthenticationError(self.name, f"Ollama server not accessible: HTTP {response.status}")
+                    
+        except asyncio.TimeoutError:
+            self._authenticated = False
+            raise AuthenticationError(self.name, f"Connection timed out after {self.timeout} seconds")
+        except aiohttp.ClientConnectorError:
+            self._authenticated = False
+            raise AuthenticationError(self.name, f"Cannot connect to Ollama at {self.base_url}. Is Ollama running?")
+        except aiohttp.ClientError as e:
+            self._authenticated = False
+            raise AuthenticationError(self.name, f"Network error connecting to Ollama: {e}")
+        except Exception as e:
+            self._authenticated = False
+            raise AuthenticationError(self.name, f"Ollama connection failed: {e}")
+        finally:
+            # Ensure session is properly closed
+            if session and not session.closed:
+                try:
+                    await session.close()
+                except Exception as e:
+                    logger.warning(f"Error closing session: {e}")
     
     async def get_models(self) -> List[ModelInfo]:
         """
@@ -192,64 +244,93 @@ class OllamaProvider(BaseProvider):
         if self._models_cache:
             return self._models_cache
         
-        # Use temporary session with proper context management
-        async with await self._create_temp_session() as session:
-            try:
-                async with session.get(f'{self.base_url}/api/tags') as response:
-                    if response.status != 200:
-                        logger.warning(f"Failed to fetch Ollama models: HTTP {response.status}")
-                        return self._get_fallback_models()
+        session = None
+        try:
+            # Create temporary session with proper cleanup
+            session = await self._create_temp_session()
+            
+            response = await asyncio.wait_for(
+                session.get(f'{self.base_url}/api/tags'),
+                timeout=self.timeout
+            )
+            async with response:
+                if response.status != 200:
+                    logger.warning(f"Failed to fetch Ollama models: HTTP {response.status}")
+                    return self._get_fallback_models()
+                
+                data = await response.json()
+                models = []
+                
+                # Store model names for mapping
+                self._available_model_names = []
+                
+                for model_data in data.get('models', []):
+                    # Extract model information
+                    model_name = model_data.get('name', '')
+                    model_size = model_data.get('size', 0)
+                    modified_at = model_data.get('modified_at', '')
                     
-                    data = await response.json()
-                    models = []
+                    # Add to available models list
+                    self._available_model_names.append(model_name)
                     
-                    for model_data in data.get('models', []):
-                        # Extract model information
-                        model_name = model_data.get('name', '')
-                        model_size = model_data.get('size', 0)
-                        modified_at = model_data.get('modified_at', '')
-                        
-                        # Estimate context window and max tokens based on model name
-                        context_window, max_tokens = self._estimate_model_limits(model_name)
-                        
-                        model_info = ModelInfo(
-                            name=model_name,
-                            display_name=model_name.replace(':', ' ').title(),
-                            description=f"Local Ollama model: {model_name}",
-                            max_tokens=max_tokens,
-                            supports_streaming=True,
-                            supports_functions=False,  # Most Ollama models don't support function calling
-                            context_window=context_window,
-                            metadata={
-                                'provider': 'ollama',
-                                'size': model_size,
-                                'modified_at': modified_at,
-                                'digest': model_data.get('digest', ''),
-                                'details': model_data.get('details', {})
-                            }
-                        )
-                        models.append(model_info)
+                    # Skip embedding models that don't support text generation
+                    if self._is_embedding_model(model_name):
+                        logger.debug(f"Skipping embedding model: {model_name}")
+                        continue
                     
-                    if models:
-                        self._models_cache = models
-                        logger.debug(f"Retrieved {len(models)} Ollama models")
-                        return models
-                    else:
-                        logger.warning("No models returned from Ollama API, using fallback models")
-                        return self._get_fallback_models()
-                        
-            except aiohttp.ClientConnectorError:
-                logger.warning("Cannot connect to Ollama server, using fallback models")
-                return self._get_fallback_models()
-            except aiohttp.ClientError as e:
-                logger.warning(f"Network error fetching Ollama models: {e}, using fallback models")
-                return self._get_fallback_models()
-            except Exception as e:
-                logger.warning(f"Failed to fetch Ollama models: {e}, using fallback models")
-                return self._get_fallback_models()
+                    # Estimate context window and max tokens based on model name
+                    context_window, max_tokens = self._estimate_model_limits(model_name)
+                    
+                    model_info = ModelInfo(
+                        name=model_name,
+                        display_name=model_name.replace(':', ' ').title(),
+                        description=f"Local Ollama model: {model_name}",
+                        max_tokens=max_tokens,
+                        supports_streaming=True,
+                        supports_functions=False,  # Most Ollama models don't support function calling
+                        context_window=context_window,
+                        metadata={
+                            'provider': 'ollama',
+                            'size': model_size,
+                            'modified_at': modified_at,
+                            'digest': model_data.get('digest', ''),
+                            'details': model_data.get('details', {})
+                        }
+                    )
+                    models.append(model_info)
+                
+                if models:
+                    self._models_cache = models
+                    logger.debug(f"Retrieved {len(models)} Ollama models")
+                    logger.info(f"Available Ollama models: {', '.join(self._available_model_names[:10])}...")
+                    return models
+                else:
+                    logger.warning("No models returned from Ollama API, using fallback models")
+                    return self._get_fallback_models()
+                    
+        except asyncio.TimeoutError:
+            logger.warning(f"Request timed out after {self.timeout} seconds, using fallback models")
+            return self._get_fallback_models()
+        except aiohttp.ClientConnectorError:
+            logger.warning("Cannot connect to Ollama server, using fallback models")
+            return self._get_fallback_models()
+        except aiohttp.ClientError as e:
+            logger.warning(f"Network error fetching Ollama models: {e}, using fallback models")
+            return self._get_fallback_models()
+        except Exception as e:
+            logger.warning(f"Failed to fetch Ollama models: {e}, using fallback models")
+            return self._get_fallback_models()
+        finally:
+            # Ensure session is properly closed
+            if session and not session.closed:
+                try:
+                    await session.close()
+                except Exception as e:
+                    logger.warning(f"Error closing session: {e}")
     
     def _get_fallback_models(self) -> List[ModelInfo]:
         """Get fallback models when Ollama server is not available."""
+        # Common models that are likely to be available
         fallback_models = [
             ModelInfo(
                 name="llama2",
@@ -272,19 +353,19 @@ class OllamaProvider(BaseProvider):
                 metadata={'provider': 'ollama', 'fallback': True}
             ),
             ModelInfo(
-                name="codellama",
-                display_name="Code Llama",
-                description="Meta's Code Llama model (fallback)",
-                max_tokens=8192,
+                name="phi",
+                display_name="Phi",
+                description="Microsoft Phi model (fallback)",
+                max_tokens=2048,
                 supports_streaming=True,
                 supports_functions=False,
-                context_window=16384,
+                context_window=4096,
                 metadata={'provider': 'ollama', 'fallback': True}
             ),
             ModelInfo(
-                name="vicuna",
-                display_name="Vicuna",
-                description="Vicuna model (fallback)",
+                name="neural-chat",
+                display_name="Neural Chat",
+                description="Intel Neural Chat model (fallback)",
                 max_tokens=2048,
                 supports_streaming=True,
                 supports_functions=False,
@@ -335,6 +416,31 @@ class OllamaProvider(BaseProvider):
             # Default fallback
             return 4096, 2048
     
+    def _is_embedding_model(self, model_name: str) -> bool:
+        """
+        Check if a model is an embedding model that doesn't support text generation.
+        
+        Args:
+            model_name: Name of the model
+            
+        Returns:
+            True if it's an embedding model, False otherwise
+        """
+        model_name_lower = model_name.lower()
+        
+        # Common embedding model patterns
+        embedding_patterns = [
+            'embed',
+            'embedding',
+            'sentence-transformer',
+            'nomic-embed',
+            'all-minilm',
+            'bge-',
+            'e5-'
+        ]
+        
+        return any(pattern in model_name_lower for pattern in embedding_patterns)
+    
     async def generate_text(
         self,
         messages: List[Message],
@@ -357,9 +463,21 @@ class OllamaProvider(BaseProvider):
             AuthenticationError: If not authenticated
             APIError: If API call fails
         """
-        self._ensure_authenticated()
+        # Auto-authenticate if not already authenticated
+        if not self._authenticated:
+            try:
+                await self.authenticate()
+            except Exception as e:
+                raise AuthenticationError(self.name, f"Failed to authenticate: {e}")
+        
         self._validate_messages(messages)
         config = self._validate_config(config)
+        
+        # Map model to available model if needed
+        model = await self._map_model_to_available(model)
+        
+        # Adjust timeout based on model size
+        self._adjust_timeout_for_model(model)
         
         try:
             session = await self._get_session()
@@ -383,8 +501,12 @@ class OllamaProvider(BaseProvider):
             if config.stop_sequences:
                 payload['options']['stop'] = config.stop_sequences
             
-            # Make API call
-            async with session.post(f'{self.base_url}/api/generate', json=payload) as response:
+            # Make API call with timeout
+            response = await asyncio.wait_for(
+                session.post(f'{self.base_url}/api/generate', json=payload),
+                timeout=self.timeout
+            )
+            async with response:
                 if response.status == 404:
                     raise ModelNotFoundError(self.name, model)
                 elif response.status != 200:
@@ -419,6 +541,8 @@ class OllamaProvider(BaseProvider):
                     }
                 )
                 
+        except asyncio.TimeoutError:
+            raise APIError(self.name, message=f"Request timed out after {self.timeout} seconds")
         except aiohttp.ClientError as e:
             raise APIError(self.name, message=f"Network error: {e}")
         except (ModelNotFoundError, APIError):
@@ -448,9 +572,21 @@ class OllamaProvider(BaseProvider):
             AuthenticationError: If not authenticated
             APIError: If API call fails
         """
-        self._ensure_authenticated()
+        # Auto-authenticate if not already authenticated
+        if not self._authenticated:
+            try:
+                await self.authenticate()
+            except Exception as e:
+                raise AuthenticationError(self.name, f"Failed to authenticate: {e}")
+        
         self._validate_messages(messages)
         config = self._validate_config(config)
+        
+        # Map model to available model if needed
+        model = await self._map_model_to_available(model)
+        
+        # Adjust timeout based on model size
+        self._adjust_timeout_for_model(model)
         
         try:
             session = await self._get_session()
@@ -474,8 +610,12 @@ class OllamaProvider(BaseProvider):
             if config.stop_sequences:
                 payload['options']['stop'] = config.stop_sequences
             
-            # Make streaming API call
-            async with session.post(f'{self.base_url}/api/generate', json=payload) as response:
+            # Make streaming API call with timeout
+            response = await asyncio.wait_for(
+                session.post(f'{self.base_url}/api/generate', json=payload),
+                timeout=self.timeout
+            )
+            async with response:
                 if response.status == 404:
                     raise ModelNotFoundError(self.name, model)
                 elif response.status != 200:
@@ -502,6 +642,8 @@ class OllamaProvider(BaseProvider):
                         except json.JSONDecodeError:
                             continue  # Skip malformed JSON
                 
+        except asyncio.TimeoutError:
+            raise APIError(self.name, message=f"Streaming request timed out after {self.timeout} seconds")
         except aiohttp.ClientError as e:
             raise APIError(self.name, message=f"Network error: {e}")
         except (ModelNotFoundError, APIError):
@@ -574,43 +716,75 @@ class OllamaProvider(BaseProvider):
         Returns:
             Dictionary with health status information
         """
-        # Use temporary session with proper context management
-        async with await self._create_temp_session() as session:
+        session = None
+        try:
+            # Create temporary session with proper cleanup
+            session = await self._create_temp_session()
+            
+            # Use the managed event loop for timeout
+            response = await asyncio.wait_for(
+                session.get(f'{self.base_url}/api/tags'),
+                timeout=self.timeout
+            )
+            async with response:
+                if response.status == 200:
+                    data = await response.json()
+                    model_count = len(data.get('models', []))
+                    
+                    return {
+                        'status': 'healthy',
+                        'authenticated': self._authenticated,
+                        'models_available': model_count,
+                        'base_url': self.base_url,
+                        'timestamp': str((get_event_loop_manager().get_loop() or asyncio.get_event_loop()).time())
+                    }
+                else:
+                    return {
+                        'status': 'unhealthy',
+                        'error': f'HTTP {response.status}',
+                        'authenticated': self._authenticated,
+                        'timestamp': str((get_event_loop_manager().get_loop() or asyncio.get_event_loop()).time())
+                    }
+                    
+        except asyncio.TimeoutError:
+            return {
+                'status': 'unhealthy',
+                'error': f'Health check timed out after {self.timeout} seconds',
+                'authenticated': self._authenticated,
+                'timestamp': str((get_event_loop_manager().get_loop() or asyncio.get_event_loop()).time())
+            }
+        except aiohttp.ClientConnectorError:
+            return {
+                'status': 'unhealthy',
+                'error': 'Cannot connect to Ollama. Is Ollama running?',
+                'authenticated': self._authenticated,
+                'timestamp': str((get_event_loop_manager().get_loop() or asyncio.get_event_loop()).time())
+            }
+        except Exception as e:
+            return {
+                'status': 'unhealthy',
+                'error': str(e),
+                'authenticated': self._authenticated,
+                'timestamp': str((get_event_loop_manager().get_loop() or asyncio.get_event_loop()).time())
+            }
+        finally:
+            # Ensure session is properly closed
+            if session and not session.closed:
+                try:
+                    await session.close()
+                except Exception as e:
+                    logger.warning(f"Error closing session: {e}")
+    
+    async def close(self):
+        """Close the provider and clean up resources."""
+        if self._session and not self._session.closed:
             try:
-                async with session.get(f'{self.base_url}/api/tags') as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        model_count = len(data.get('models', []))
-                        
-                        return {
-                            'status': 'healthy',
-                            'authenticated': self._authenticated,
-                            'models_available': model_count,
-                            'base_url': self.base_url,
-                            'timestamp': str(asyncio.get_event_loop().time())
-                        }
-                    else:
-                        return {
-                            'status': 'unhealthy',
-                            'error': f'HTTP {response.status}',
-                            'authenticated': self._authenticated,
-                            'timestamp': str(asyncio.get_event_loop().time())
-                        }
-                        
-            except aiohttp.ClientConnectorError:
-                return {
-                    'status': 'unhealthy',
-                    'error': 'Cannot connect to Ollama. Is Ollama running?',
-                    'authenticated': self._authenticated,
-                    'timestamp': str(asyncio.get_event_loop().time())
-                }
+                logger.debug(f"Closing session for {self.name} provider")
+                await self._session.close()
+                self._session = None
+                logger.debug(f"Session closed for {self.name} provider")
             except Exception as e:
-                return {
-                    'status': 'unhealthy',
-                    'error': str(e),
-                    'authenticated': self._authenticated,
-                    'timestamp': str(asyncio.get_event_loop().time())
-                }
+                logger.warning(f"Error closing session for {self.name} provider: {e}")
     
     async def __aenter__(self):
         """Async context manager entry."""
@@ -618,5 +792,118 @@ class OllamaProvider(BaseProvider):
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
-        if self._session and not self._session.closed:
-            await self._session.close()
+        await self.close()
+        
+    def _adjust_timeout_for_model(self, model: str):
+        """
+        Adjust timeout based on model size and complexity.
+        
+        Args:
+            model: Model name
+        """
+        model_lower = model.lower()
+        
+        # Large models that need longer timeouts
+        large_models = [
+            'deepseek-coder',
+            '33b',
+            '70b',
+            'llama3-70b',
+            'mixtral-8x7b',
+            'llama2-70b',
+            'codellama-70b',
+            'wizardcoder',
+            'dolphin-mixtral'
+        ]
+        
+        # Check if the model is a large model
+        if any(large_model in model_lower for large_model in large_models):
+            logger.info(f"Using extended timeout ({self.large_model_timeout}s) for large model: {model}")
+            self.timeout = self.large_model_timeout
+        else:
+            # Reset to default timeout for smaller models
+            self.timeout = self.default_timeout
+            logger.debug(f"Using standard timeout ({self.default_timeout}s) for model: {model}")
+            
+    async def _map_model_to_available(self, model: str) -> str:
+        """
+        Map a requested model to an available Ollama model.
+        
+        Args:
+            model: The requested model name
+            
+        Returns:
+            An available model name that best matches the request
+            
+        Raises:
+            ModelNotFoundError: If no suitable model can be found
+        """
+        # If we don't have available models yet, try to fetch them
+        if not hasattr(self, '_available_model_names') or not self._available_model_names:
+            try:
+                await self.get_models()
+            except Exception as e:
+                logger.warning(f"Failed to fetch available models: {e}")
+                # If we can't fetch models, use the original model name
+                return model
+        
+        # If the model is already available, use it directly
+        if hasattr(self, '_available_model_names') and model in self._available_model_names:
+            return model
+            
+        # Common model mappings
+        model_mapping = {
+            # Standard mappings
+            'gpt-3.5-turbo': ['llama2', 'mistral', 'neural-chat', 'phi'],
+            'gpt-4': ['llama2:70b', 'llama2:13b', 'mixtral', 'mistral-large'],
+            'claude': ['mistral', 'llama2', 'neural-chat'],
+            
+            # Mistral models
+            'mistral-tiny': ['mistral', 'mistral:7b', 'mistral-openorca'],
+            'mistral-small': ['mistral', 'mistral:7b', 'mistral-openorca'],
+            'mistral-medium': ['mistral', 'mistral:7b', 'mistral-openorca'],
+            'mistral-large': ['mistral', 'mistral:7b', 'mistral-openorca'],
+            
+            # Google models
+            'gemini-pro': ['llama2', 'mistral', 'neural-chat'],
+            
+            # Generic fallbacks
+            'llama': ['llama2', 'llama2:7b'],
+            'mixtral': ['mixtral', 'mistral'],
+            'codellama': ['codellama', 'llama2-code', 'codellama:7b']
+        }
+        
+        # Try to map the model
+        if model in model_mapping:
+            # Try each potential mapping in order
+            for potential_model in model_mapping[model]:
+                if hasattr(self, '_available_model_names') and potential_model in self._available_model_names:
+                    logger.info(f"Mapped model '{model}' to available Ollama model '{potential_model}'")
+                    return potential_model
+        
+        # If we have available models, try to find a partial match
+        if hasattr(self, '_available_model_names') and self._available_model_names:
+            # Try to find a model that contains the requested model name
+            model_lower = model.lower()
+            for available_model in self._available_model_names:
+                if model_lower in available_model.lower():
+                    logger.info(f"Found partial match for '{model}': '{available_model}'")
+                    return available_model
+                    
+            # Try common models that might be available
+            common_models = ['llama2', 'mistral', 'neural-chat', 'phi']
+            for common_model in common_models:
+                if common_model in self._available_model_names:
+                    logger.warning(f"Model '{model}' not found. Using common model '{common_model}' instead")
+                    return common_model
+                    
+            # If we still haven't found a match, use the first available model
+            if self._available_model_names:
+                first_model = self._available_model_names[0]
+                logger.warning(f"Model '{model}' not found. Using first available model '{first_model}' instead")
+                return first_model
+        
+        # If we don't have available models or couldn't find a match, return the original model
+        # and let the API handle the error
+        logger.warning(f"No mapping found for model '{model}'. Using as-is.")
+        return model

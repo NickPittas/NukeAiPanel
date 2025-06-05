@@ -5,7 +5,9 @@ This module implements the configuration UI for API keys, provider settings,
 and user preferences for the Nuke AI Panel.
 """
 
+import asyncio
 import logging
+import threading
 from typing import Optional, Dict, Any
 
 try:
@@ -403,6 +405,7 @@ class ProviderSettingsWidget(QWidget):
         """Perform actual connection test with real API calls."""
         import asyncio
         import threading
+        import time
         
         def test_thread():
             """Run the connection test in a separate thread."""
@@ -412,16 +415,35 @@ class ProviderSettingsWidget(QWidget):
                 asyncio.set_event_loop(loop)
                 
                 try:
-                    # Run the actual test
-                    success, error_msg = loop.run_until_complete(
-                        self._test_provider_connection_async(settings)
-                    )
+                    # Set a timeout for the entire operation
+                    timeout = settings.get('timeout', 30)
                     
-                    # Schedule UI update on main thread
-                    QTimer.singleShot(0, lambda: self.connection_test_complete(progress, success, error_msg))
-                    
+                    # Run the actual test with timeout
+                    try:
+                        success, error_msg = loop.run_until_complete(
+                            asyncio.wait_for(
+                                self._test_provider_connection_async(settings),
+                                timeout=timeout
+                            )
+                        )
+                        
+                        # Schedule UI update on main thread
+                        QTimer.singleShot(0, lambda: self.connection_test_complete(progress, success, error_msg))
+                        
+                    except asyncio.TimeoutError:
+                        error_msg = f"Connection test timed out after {timeout} seconds"
+                        QTimer.singleShot(0, lambda: self.connection_test_complete(progress, False, error_msg))
+                        
                 finally:
-                    loop.close()
+                    # Ensure all tasks are complete before closing
+                    try:
+                        pending = asyncio.all_tasks(loop)
+                        if pending:
+                            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                    except Exception as e:
+                        logging.warning(f"Error cleaning up pending tasks: {e}")
+                    finally:
+                        loop.close()
                     
             except Exception as e:
                 error_msg = f"Test failed: {str(e)}"
@@ -430,6 +452,20 @@ class ProviderSettingsWidget(QWidget):
         # Start test in background thread
         thread = threading.Thread(target=test_thread, daemon=True)
         thread.start()
+        
+        # Add a watchdog timer to ensure the UI is updated even if the thread hangs
+        timeout = settings.get('timeout', 30) + 5  # Add 5 seconds buffer
+        QTimer.singleShot(timeout * 1000, lambda: self._check_test_completion(progress, thread))
+    
+    def _check_test_completion(self, progress: QProgressDialog, thread: threading.Thread):
+        """Check if the test thread has completed, force completion if it's still running."""
+        if thread.is_alive():
+            # Thread is still running after timeout, force completion
+            self.connection_test_complete(
+                progress,
+                False,
+                "Connection test timed out. The server may be unresponsive or blocked."
+            )
     
     async def _test_provider_connection_async(self, settings: Dict[str, Any]) -> tuple[bool, str]:
         """Perform async connection test for the provider."""
@@ -454,6 +490,7 @@ class ProviderSettingsWidget(QWidget):
     
     async def _test_ollama_connection(self, settings: Dict[str, Any]) -> tuple[bool, str]:
         """Test Ollama connection."""
+        session = None
         try:
             import aiohttp
             
@@ -466,25 +503,48 @@ class ProviderSettingsWidget(QWidget):
             if api_key:
                 headers['Authorization'] = f'Bearer {api_key}'
             
-            timeout_obj = aiohttp.ClientTimeout(total=timeout)
+            # Use connector with proper cleanup settings
+            # Note: keepalive_timeout cannot be used with force_close=True
+            connector = aiohttp.TCPConnector(
+                limit=10,
+                limit_per_host=5,
+                enable_cleanup_closed=True,
+                force_close=True
+            )
             
-            async with aiohttp.ClientSession(headers=headers, timeout=timeout_obj) as session:
-                async with session.get(f'{base_url}/api/tags') as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        model_count = len(data.get('models', []))
-                        auth_status = "with authentication" if api_key else "without authentication"
-                        return True, f"Connected successfully {auth_status}! Found {model_count} models."
-                    else:
-                        return False, f"Ollama server responded with HTTP {response.status}"
+            session = aiohttp.ClientSession(headers=headers, connector=connector)
+            
+            # Use asyncio.wait_for for timeout instead of ClientTimeout
+            response = await asyncio.wait_for(
+                session.get(f'{base_url}/api/tags'),
+                timeout=timeout
+            )
+            async with response:
+                if response.status == 200:
+                    data = await response.json()
+                    model_count = len(data.get('models', []))
+                    auth_status = "with authentication" if api_key else "without authentication"
+                    return True, f"Connected successfully {auth_status}! Found {model_count} models."
+                else:
+                    return False, f"Ollama server responded with HTTP {response.status}"
                         
+        except asyncio.TimeoutError:
+            return False, f"Connection timed out after {timeout} seconds. Is Ollama running at {base_url}?"
         except aiohttp.ClientConnectorError:
             return False, f"Cannot connect to Ollama at {base_url}. Is Ollama running on the specified URL?"
         except Exception as e:
             return False, f"Connection failed: {str(e)}"
+        finally:
+            # Ensure session is properly closed
+            if session and not session.closed:
+                try:
+                    await session.close()
+                except Exception as e:
+                    logging.warning(f"Error closing session: {e}")
     
     async def _test_openai_connection(self, settings: Dict[str, Any]) -> tuple[bool, str]:
         """Test OpenAI connection."""
+        session = None
         try:
             import aiohttp
             
@@ -500,21 +560,43 @@ class ProviderSettingsWidget(QWidget):
                 'Content-Type': 'application/json'
             }
             
-            timeout_obj = aiohttp.ClientTimeout(total=timeout)
+            # Use connector with proper cleanup settings
+            # Note: keepalive_timeout cannot be used with force_close=True
+            connector = aiohttp.TCPConnector(
+                limit=10,
+                limit_per_host=5,
+                enable_cleanup_closed=True,
+                force_close=True
+            )
             
-            async with aiohttp.ClientSession(headers=headers, timeout=timeout_obj) as session:
-                async with session.get(f'{base_url}/models') as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        model_count = len(data.get('data', []))
-                        return True, f"Connected successfully! Found {model_count} models."
-                    elif response.status == 401:
-                        return False, "Invalid API key"
-                    else:
-                        return False, f"OpenAI API responded with HTTP {response.status}"
+            session = aiohttp.ClientSession(headers=headers, connector=connector)
+            
+            # Use asyncio.wait_for for timeout instead of ClientTimeout
+            response = await asyncio.wait_for(
+                session.get(f'{base_url}/models'),
+                timeout=timeout
+            )
+            async with response:
+                if response.status == 200:
+                    data = await response.json()
+                    model_count = len(data.get('data', []))
+                    return True, f"Connected successfully! Found {model_count} models."
+                elif response.status == 401:
+                    return False, "Invalid API key"
+                else:
+                    return False, f"OpenAI API responded with HTTP {response.status}"
                         
+        except asyncio.TimeoutError:
+            return False, f"Connection timed out after {timeout} seconds"
         except Exception as e:
             return False, f"Connection failed: {str(e)}"
+        finally:
+            # Ensure session is properly closed
+            if session and not session.closed:
+                try:
+                    await session.close()
+                except Exception as e:
+                    logging.warning(f"Error closing session: {e}")
     
     async def _test_anthropic_connection(self, settings: Dict[str, Any]) -> tuple[bool, str]:
         """Test Anthropic connection."""
@@ -540,10 +622,16 @@ class ProviderSettingsWidget(QWidget):
                 'messages': [{'role': 'user', 'content': 'Hi'}]
             }
             
-            timeout_obj = aiohttp.ClientTimeout(total=timeout)
+            # Use connector without ClientTimeout to avoid asyncio context issues
+            connector = aiohttp.TCPConnector(limit=10, limit_per_host=5)
             
-            async with aiohttp.ClientSession(headers=headers, timeout=timeout_obj) as session:
-                async with session.post('https://api.anthropic.com/v1/messages', json=payload) as response:
+            async with aiohttp.ClientSession(headers=headers, connector=connector) as session:
+                # Use asyncio.wait_for for timeout instead of ClientTimeout
+                response = await asyncio.wait_for(
+                    session.post('https://api.anthropic.com/v1/messages', json=payload),
+                    timeout=timeout
+                )
+                async with response:
                     if response.status == 200:
                         return True, "Connected successfully!"
                     elif response.status == 401:
@@ -557,6 +645,8 @@ class ProviderSettingsWidget(QWidget):
                     else:
                         return False, f"Anthropic API responded with HTTP {response.status}"
                         
+        except asyncio.TimeoutError:
+            return False, f"Connection timed out after {timeout} seconds"
         except Exception as e:
             return False, f"Connection failed: {str(e)}"
     
@@ -570,13 +660,20 @@ class ProviderSettingsWidget(QWidget):
                 return False, "API key is required for Google"
             
             timeout = settings.get('timeout', 30)
-            timeout_obj = aiohttp.ClientTimeout(total=timeout)
             
             # Test with models endpoint
             url = f'https://generativelanguage.googleapis.com/v1/models?key={api_key}'
             
-            async with aiohttp.ClientSession(timeout=timeout_obj) as session:
-                async with session.get(url) as response:
+            # Use connector without ClientTimeout to avoid asyncio context issues
+            connector = aiohttp.TCPConnector(limit=10, limit_per_host=5)
+            
+            async with aiohttp.ClientSession(connector=connector) as session:
+                # Use asyncio.wait_for for timeout instead of ClientTimeout
+                response = await asyncio.wait_for(
+                    session.get(url),
+                    timeout=timeout
+                )
+                async with response:
                     if response.status == 200:
                         data = await response.json()
                         model_count = len(data.get('models', []))
@@ -586,6 +683,8 @@ class ProviderSettingsWidget(QWidget):
                     else:
                         return False, f"Google API responded with HTTP {response.status}"
                         
+        except asyncio.TimeoutError:
+            return False, f"Connection timed out after {timeout} seconds"
         except Exception as e:
             return False, f"Connection failed: {str(e)}"
     
@@ -605,10 +704,16 @@ class ProviderSettingsWidget(QWidget):
                 'Content-Type': 'application/json'
             }
             
-            timeout_obj = aiohttp.ClientTimeout(total=timeout)
+            # Use connector without ClientTimeout to avoid asyncio context issues
+            connector = aiohttp.TCPConnector(limit=10, limit_per_host=5)
             
-            async with aiohttp.ClientSession(headers=headers, timeout=timeout_obj) as session:
-                async with session.get('https://api.mistral.ai/v1/models') as response:
+            async with aiohttp.ClientSession(headers=headers, connector=connector) as session:
+                # Use asyncio.wait_for for timeout instead of ClientTimeout
+                response = await asyncio.wait_for(
+                    session.get('https://api.mistral.ai/v1/models'),
+                    timeout=timeout
+                )
+                async with response:
                     if response.status == 200:
                         data = await response.json()
                         model_count = len(data.get('data', []))
@@ -618,11 +723,14 @@ class ProviderSettingsWidget(QWidget):
                     else:
                         return False, f"Mistral API responded with HTTP {response.status}"
                         
+        except asyncio.TimeoutError:
+            return False, f"Connection timed out after {timeout} seconds"
         except Exception as e:
             return False, f"Connection failed: {str(e)}"
     
     async def _test_openrouter_connection(self, settings: Dict[str, Any]) -> tuple[bool, str]:
         """Test OpenRouter connection."""
+        session = None
         try:
             import aiohttp
             
@@ -638,21 +746,43 @@ class ProviderSettingsWidget(QWidget):
                 'Content-Type': 'application/json'
             }
             
-            timeout_obj = aiohttp.ClientTimeout(total=timeout)
+            # Use connector with proper cleanup settings
+            # Note: keepalive_timeout cannot be used with force_close=True
+            connector = aiohttp.TCPConnector(
+                limit=10,
+                limit_per_host=5,
+                enable_cleanup_closed=True,
+                force_close=True
+            )
             
-            async with aiohttp.ClientSession(headers=headers, timeout=timeout_obj) as session:
-                async with session.get(f'{base_url}/models') as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        model_count = len(data.get('data', []))
-                        return True, f"Connected successfully! Found {model_count} models."
-                    elif response.status == 401:
-                        return False, "Invalid API key"
-                    else:
-                        return False, f"OpenRouter API responded with HTTP {response.status}"
+            session = aiohttp.ClientSession(headers=headers, connector=connector)
+            
+            # Use asyncio.wait_for for timeout instead of ClientTimeout
+            response = await asyncio.wait_for(
+                session.get(f'{base_url}/models'),
+                timeout=timeout
+            )
+            async with response:
+                if response.status == 200:
+                    data = await response.json()
+                    model_count = len(data.get('data', []))
+                    return True, f"Connected successfully! Found {model_count} models."
+                elif response.status == 401:
+                    return False, "Invalid API key"
+                else:
+                    return False, f"OpenRouter API responded with HTTP {response.status}"
                         
+        except asyncio.TimeoutError:
+            return False, f"Connection timed out after {timeout} seconds"
         except Exception as e:
             return False, f"Connection failed: {str(e)}"
+        finally:
+            # Ensure session is properly closed
+            if session and not session.closed:
+                try:
+                    await session.close()
+                except Exception as e:
+                    logging.warning(f"Error closing session: {e}")
             
     def connection_test_complete(self, progress: QProgressDialog, success: bool, error_msg: str = ""):
         """Handle connection test completion."""

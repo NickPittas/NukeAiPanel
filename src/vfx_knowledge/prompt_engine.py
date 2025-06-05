@@ -410,7 +410,12 @@ You have comprehensive knowledge across all compositing disciplines:
 1. **Analysis**: Brief analysis of the situation
 2. **Approach**: Recommended strategy and workflow
 3. **Implementation**: Step-by-step instructions
-4. **Code**: Working Nuke Python script
+4. **Code**: Working Nuke Python script. ALWAYS format your code in a markdown code block using triple backticks with 'python' language specifier like this:
+```python
+# Your code here
+import nuke
+# Rest of your code
+```
 5. **Notes**: Additional considerations and tips"""
         
         if prompt_type == PromptType.TROUBLESHOOTING:
@@ -419,7 +424,12 @@ You have comprehensive knowledge across all compositing disciplines:
 1. **Problem Diagnosis**: Identify the root cause
 2. **Solution**: Recommended fix or workaround
 3. **Prevention**: How to avoid this issue in future
-4. **Code**: Any necessary script fixes
+4. **Code**: Any necessary script fixes. ALWAYS format your code in a markdown code block using triple backticks with 'python' language specifier like this:
+```python
+# Your code here
+import nuke
+# Rest of your code
+```
 5. **Testing**: How to verify the solution works"""
         
         return base_format

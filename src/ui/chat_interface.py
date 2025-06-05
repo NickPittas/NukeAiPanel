@@ -295,8 +295,39 @@ class MessageWidget(QWidget):
         
     def show_copy_feedback(self):
         """Show temporary feedback for copy action."""
-        # This could be enhanced with a tooltip or temporary overlay
-        pass
+        # Create a temporary tooltip-like feedback
+        try:
+            # Find the copy button
+            for child in self.children():
+                if isinstance(child, QWidget):
+                    for button in child.findChildren(QPushButton):
+                        if button.text() == "Copy Code":
+                            # Store original style
+                            original_style = button.styleSheet()
+                            
+                            # Change to success style
+                            button.setText("Copied!")
+                            button.setStyleSheet("""
+                                QPushButton {
+                                    background-color: #4CAF50;
+                                    border: 1px solid #45A049;
+                                    border-radius: 3px;
+                                    color: white;
+                                    font-size: 10px;
+                                    padding: 2px 8px;
+                                }
+                            """)
+                            
+                            # Reset after 1.5 seconds
+                            QTimer.singleShot(1500, lambda: self.reset_copy_button(button, original_style))
+                            return
+        except Exception as e:
+            logging.error(f"Failed to show copy feedback: {e}")
+    
+    def reset_copy_button(self, button, original_style):
+        """Reset the copy button to its original state."""
+        button.setText("Copy Code")
+        button.setStyleSheet(original_style)
 
 
 class TypingIndicator(QWidget):
@@ -637,8 +668,8 @@ class ChatInterface(QWidget):
             # Workflow list
             workflow_list = QListWidget()
             for workflow in workflows:
-                item = QListWidgetItem(workflow['name'])
-                item.setToolTip(workflow.get('description', ''))
+                item = QListWidgetItem(workflow.name)
+                item.setToolTip(workflow.description)
                 item.setData(Qt.UserRole, workflow)
                 workflow_list.addItem(item)
                 
@@ -672,9 +703,8 @@ class ChatInterface(QWidget):
         workflow = current_item.data(Qt.UserRole)
         
         # Add workflow prompt to input
-        prompt = f"Please help me with the {workflow['name']} workflow."
-        if 'description' in workflow:
-            prompt += f" {workflow['description']}"
+        prompt = f"Please help me with the {workflow.name} workflow."
+        prompt += f" {workflow.description}"
             
         self.input_text.setPlainText(prompt)
         dialog.accept()

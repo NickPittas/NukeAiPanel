@@ -5,6 +5,7 @@ Provides integration with Mistral AI's models including Mistral 7B, Mixtral, and
 """
 
 import asyncio
+import sys
 from typing import List, Optional, AsyncGenerator, Dict, Any
 
 # Handle different versions of mistralai library
@@ -143,14 +144,29 @@ class MistralProvider(BaseProvider):
         self.api_key = config.get('api_key')
         self.endpoint = config.get('endpoint', 'https://api.mistral.ai')
         
+        # Log configuration (without sensitive data)
+        logger.debug(f"Initializing Mistral provider with endpoint: {self.endpoint}")
+        logger.debug(f"API key present: {bool(self.api_key)}")
+        
         if not self.api_key:
+            logger.error(f"Mistral API key is missing in configuration")
             raise ProviderError(name, "Mistral API key is required")
         
-        # Initialize async client
-        self.client = MistralAsyncClient(
-            api_key=self.api_key,
-            endpoint=self.endpoint
-        )
+        # Validate API key format
+        if len(self.api_key.strip()) < 10:
+            logger.error(f"Mistral API key appears to be invalid (too short)")
+            raise ProviderError(name, "Mistral API key appears to be invalid (too short)")
+        
+        try:
+            # Initialize async client
+            self.client = MistralAsyncClient(
+                api_key=self.api_key,
+                endpoint=self.endpoint
+            )
+            logger.debug(f"Mistral client initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize Mistral client: {e}")
+            raise ProviderError(name, f"Failed to initialize Mistral client: {e}")
         
         # Model information cache
         self._models_cache: Optional[List[ModelInfo]] = None
@@ -166,21 +182,103 @@ class MistralProvider(BaseProvider):
             AuthenticationError: If authentication fails
         """
         try:
-            # Test authentication by listing models
-            models = await self.client.list_models()
+            # Improved check for Mistral library and client
+            try:
+                import mistralai
+                logger.debug(f"Mistral library found: {mistralai.__name__}")
+                
+                # Verify client can be imported
+                try:
+                    from mistralai.async_client import MistralAsyncClient as TestClient
+                    logger.debug("MistralAsyncClient imported successfully")
+                except ImportError:
+                    try:
+                        from mistralai import Mistral as TestClient
+                        logger.debug("Mistral client imported successfully (newer structure)")
+                    except ImportError:
+                        try:
+                            from mistralai.client import MistralClient as TestClient
+                            logger.debug("MistralClient imported successfully (alternative structure)")
+                        except ImportError:
+                            self._authenticated = False
+                            logger.error("Failed to import Mistral client classes")
+                            logger.warning("Please run: python install_mistral_library.py")
+                            return False
+            except ImportError:
+                self._authenticated = False
+                logger.warning(f"Mistral library not properly installed. Install with: python install_mistral_library.py")
+                return False
             
-            self._authenticated = True
-            logger.info(f"Mistral authentication successful, found {len(models.data)} models")
-            return True
+            # Validate API key format before attempting API call
+            if not self.api_key or len(self.api_key.strip()) < 10:
+                self._authenticated = False
+                logger.error(f"Invalid Mistral API key format: key is missing or too short")
+                raise AuthenticationError(self.name, "Invalid API key format: key is missing or too short")
+                
+            logger.debug(f"Attempting Mistral authentication with endpoint: {self.endpoint}")
+            logger.debug(f"API key length: {len(self.api_key)}, first 4 chars: {self.api_key[:4]}...")
             
+            # Test authentication by listing models with retry logic
+            max_retries = 3
+            retry_delay = 2  # seconds
+            
+            for attempt in range(max_retries):
+                try:
+                    # Create a new client instance for each retry to avoid stale connections
+                    if attempt > 0:
+                        logger.info(f"Retrying Mistral authentication (attempt {attempt+1}/{max_retries})")
+                        self.client = MistralAsyncClient(
+                            api_key=self.api_key,
+                            endpoint=self.endpoint
+                        )
+                    
+                    models = await self.client.list_models()
+                    
+                    self._authenticated = True
+                    logger.info(f"Mistral authentication successful, found {len(models.data)} models")
+                    return True
+                    
+                except AttributeError as attr_err:
+                    # This can happen if the client is not properly initialized
+                    logger.warning(f"Mistral client initialization issue on attempt {attempt+1}: {attr_err}")
+                    if attempt == max_retries - 1:
+                        self._authenticated = False
+                        logger.error(f"Mistral client initialization failed after {max_retries} attempts")
+                        logger.warning("Please reinstall the Mistral library with: python install_mistral_library.py")
+                        return False
+                    await asyncio.sleep(retry_delay)
+                    
+                except MistralAPIException as api_err:
+                    # Don't retry on API errors like authentication failures
+                    raise
+                    
+                except Exception as retry_err:
+                    logger.warning(f"Unexpected error during authentication attempt {attempt+1}: {retry_err}")
+                    if attempt == max_retries - 1:
+                        raise
+                    await asyncio.sleep(retry_delay)
+            
+        except ImportError as e:
+            self._authenticated = False
+            logger.warning(f"Mistral library not properly installed: {e}")
+            return False
         except MistralAPIException as e:
             self._authenticated = False
             if e.http_status == 401:
+                logger.error(f"Mistral authentication failed with 401 error: {e}")
                 raise AuthenticationError(self.name, f"Invalid API key: {e}")
             else:
+                logger.error(f"Mistral API exception during authentication: {e}")
                 raise AuthenticationError(self.name, f"Authentication failed: {e}")
         except Exception as e:
             self._authenticated = False
+            # Check if the error message indicates missing library
+            if "Mistral library not properly installed" in str(e):
+                logger.warning(f"Mistral library not properly installed: {e}")
+                return False
+            
+            # Log the full exception for debugging
+            logger.error(f"Mistral authentication failed with unexpected error: {e}", exc_info=True)
             raise AuthenticationError(self.name, f"Authentication failed: {e}")
     
     async def get_models(self) -> List[ModelInfo]:
@@ -447,3 +545,55 @@ class MistralProvider(BaseProvider):
                 'authenticated': self._authenticated,
                 'timestamp': str(asyncio.get_event_loop().time())
             }
+            
+    async def diagnose_authentication(self) -> Dict[str, Any]:
+        """
+        Diagnose authentication issues with detailed information.
+        
+        Returns:
+            Dictionary with diagnostic information
+        """
+        results = {
+            'provider': self.name,
+            'api_key_present': bool(self.api_key),
+            'api_key_valid_format': False,
+            'endpoint': self.endpoint,
+            'library_installed': False,
+            'authentication_result': False,
+            'errors': [],
+            'models_available': 0
+        }
+        
+        # Check API key format
+        if self.api_key:
+            results['api_key_valid_format'] = len(self.api_key.strip()) > 30
+            results['api_key_length'] = len(self.api_key)
+            # Show first and last few characters for debugging
+            if len(self.api_key) > 10:
+                results['api_key_preview'] = f"{self.api_key[:5]}...{self.api_key[-5:]}"
+        
+        # Check library installation
+        try:
+            import mistralai
+            results['library_installed'] = True
+            results['library_version'] = getattr(mistralai, "__version__", "unknown")
+        except ImportError as e:
+            results['errors'].append(f"Mistral library not installed: {e}")
+        
+        # Try authentication
+        try:
+            auth_result = await self.authenticate()
+            results['authentication_result'] = auth_result
+            
+            if auth_result:
+                # Try to get models
+                try:
+                    models = await self.get_models()
+                    results['models_available'] = len(models)
+                    results['model_names'] = [m.name for m in models]
+                except Exception as model_error:
+                    results['errors'].append(f"Failed to get models: {model_error}")
+        except Exception as auth_error:
+            results['errors'].append(f"Authentication failed: {auth_error}")
+        
+        return results

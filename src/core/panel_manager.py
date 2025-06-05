@@ -10,6 +10,8 @@ import json
 import os
 from typing import Optional, Dict, Any, List
 from datetime import datetime
+import asyncio
+from nuke_ai_panel.utils.event_loop_manager import get_event_loop_manager, run_coroutine, shutdown_event_loop
 
 try:
     from PySide6.QtCore import QObject, Signal, QThread, QTimer
@@ -383,10 +385,8 @@ class PanelManager(QObject):
             if not provider_instance._authenticated:
                 # Try to authenticate first
                 try:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    auth_result = loop.run_until_complete(provider_instance.authenticate())
-                    loop.close()
+                    # Use the event loop manager instead of creating a new loop
+                    auth_result = run_coroutine(provider_instance.authenticate())
                     if not auth_result:
                         self._safe_log("warning", "Ollama authentication failed, using default models")
                         return self._get_default_models_for_provider("ollama")
@@ -396,10 +396,8 @@ class PanelManager(QObject):
             
             # Try to get models from Ollama API
             try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                models = loop.run_until_complete(provider_instance.get_models())
-                loop.close()
+                # Use the event loop manager instead of creating a new loop
+                models = run_coroutine(provider_instance.get_models())
                 
                 if models:
                     model_names = [model.name for model in models]
@@ -512,6 +510,11 @@ class PanelManager(QObject):
                 practices = self.best_practices.get_applicable_practices(message)
                 if practices:
                     enhanced_message += f"\n\nRelevant best practices: {practices}"
+            
+            # Add explicit code formatting instructions for all providers
+            if any(keyword in message.lower() for keyword in ['code', 'script', 'python', 'nuke.', 'node', 'function']):
+                code_instructions = "\n\nIMPORTANT: When providing code, ALWAYS format it within markdown code blocks using triple backticks with the language specified, like this:\n```python\n# Example code\nimport nuke\n```"
+                enhanced_message += code_instructions
                     
             return enhanced_message
             
@@ -745,6 +748,13 @@ class PanelManager(QObject):
                     self.provider_manager.cleanup()
                 except Exception as cleanup_error:
                     self._safe_log("error", f"Error during provider manager cleanup: {cleanup_error}")
+            
+            # Shutdown the event loop manager
+            try:
+                shutdown_event_loop()
+                self._safe_log("info", "Event loop manager shutdown completed")
+            except Exception as loop_error:
+                self._safe_log("error", f"Error shutting down event loop manager: {loop_error}")
                 
             self._safe_log("info", "Panel manager cleanup completed")
             

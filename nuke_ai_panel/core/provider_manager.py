@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from datetime import datetime
 import importlib
 
+from ..utils.event_loop_manager import get_event_loop_manager, run_coroutine
+
 from .base_provider import BaseProvider, Message, ModelInfo, GenerationConfig, GenerationResponse
 from .config import Config, ProviderConfig
 from .auth import AuthManager
@@ -141,18 +143,54 @@ class ProviderManager:
             auth_config = self.auth_manager.get_provider_config(provider_name)
             
             # Merge configurations with proper API key handling
-            # API key loading fix applied
-            full_config = {**provider_config.__dict__, **auth_config}
+            # Start with provider config as base
+            full_config = {}
+            if hasattr(provider_config, '__dict__'):
+                full_config.update(provider_config.__dict__)
+            else:
+                # Handle case where provider_config is a dict
+                full_config.update(provider_config if isinstance(provider_config, dict) else {})
             
-            # Ensure API key is properly loaded from config
-            if not full_config.get('api_key') and hasattr(provider_config, 'api_key') and provider_config.api_key:
-                full_config['api_key'] = provider_config.api_key
+            # Add auth config (this should contain API keys)
+            if isinstance(auth_config, dict):
+                full_config.update(auth_config)
             
-            # Also check for base_url mapping
-            if hasattr(provider_config, 'base_url') and provider_config.base_url:
-                full_config['base_url'] = provider_config.base_url
-            elif hasattr(provider_config, 'custom_endpoint') and provider_config.custom_endpoint:
-                full_config['base_url'] = provider_config.custom_endpoint
+            # Ensure API key is properly loaded - check multiple sources
+            if not full_config.get('api_key'):
+                # Try to get from provider config directly
+                if hasattr(provider_config, 'api_key') and provider_config.api_key:
+                    full_config['api_key'] = provider_config.api_key
+                # Try to get from auth config
+                elif 'api_key' in auth_config:
+                    full_config['api_key'] = auth_config['api_key']
+                # Try alternative key names
+                elif 'key' in auth_config:
+                    full_config['api_key'] = auth_config['key']
+                elif hasattr(provider_config, 'key') and provider_config.key:
+                    full_config['api_key'] = provider_config.key
+                
+                # Special handling for Mistral API key
+                if provider_name == 'mistral' and not full_config.get('api_key'):
+                    # Try to get API key directly from auth manager
+                    mistral_key = self.auth_manager.get_api_key('mistral')
+                    if mistral_key:
+                        full_config['api_key'] = mistral_key
+                        logger.debug("Retrieved Mistral API key from auth manager")
+            
+            # Handle base_url mapping
+            if not full_config.get('base_url'):
+                if hasattr(provider_config, 'base_url') and provider_config.base_url:
+                    full_config['base_url'] = provider_config.base_url
+                elif hasattr(provider_config, 'custom_endpoint') and provider_config.custom_endpoint:
+                    full_config['base_url'] = provider_config.custom_endpoint
+                elif hasattr(provider_config, 'endpoint') and provider_config.endpoint:
+                    full_config['base_url'] = provider_config.endpoint
+            
+            # Log configuration for debugging (without sensitive data)
+            config_debug = {k: v for k, v in full_config.items() if k != 'api_key'}
+            if 'api_key' in full_config:
+                config_debug['api_key'] = '***' if full_config['api_key'] else 'None'
+            logger.debug(f"Provider {provider_name} config: {config_debug}")
             
             # Create provider instance
             provider = provider_class(provider_name, full_config)
@@ -377,9 +415,70 @@ class ProviderManager:
         
         return None
     
+    # Model name mapping between providers
+    MODEL_NAME_MAPPING = {
+        # Standard model names that work across providers
+        'standard': {
+            'gpt-3.5-turbo': {
+                'openai': 'gpt-3.5-turbo',
+                'openrouter': 'openai/gpt-3.5-turbo',
+                'anthropic': 'claude-instant-1.2',
+                'mistral': 'mistral-small',
+                'ollama': 'llama2',
+                'google': 'gemini-pro'
+            },
+            'gpt-4': {
+                'openai': 'gpt-4',
+                'openrouter': 'openai/gpt-4',
+                'anthropic': 'claude-3-opus',
+                'mistral': 'mistral-large-latest',
+                'ollama': 'llama2:13b',
+                'google': 'gemini-pro'
+            },
+            'claude': {
+                'anthropic': 'claude-3-sonnet',
+                'openrouter': 'anthropic/claude-3-sonnet',
+                'openai': 'gpt-4',
+                'mistral': 'mistral-medium',
+                'ollama': 'mistral',
+                'google': 'gemini-pro'
+            }
+        },
+        
+        # Provider-specific model mappings
+        'mistral': {
+            'mistral-tiny': 'mistral-tiny',
+            'mistral-small': 'mistral-small',
+            'mistral-medium': 'mistral-medium',
+            'mistral-large': 'mistral-large-latest',
+            'mistral': 'mistral-small',
+            'mixtral': 'open-mixtral-8x7b'
+        },
+        'ollama': {
+            'mistral-tiny': 'mistral',
+            'mistral-small': 'mistral',
+            'mistral-medium': 'mistral',
+            'mistral-large': 'mistral',
+            'mistral': 'mistral',
+            'mixtral': 'mixtral',
+            'llama': 'llama2',
+            'llama2:70b': 'llama2:13b',
+            'gemini-pro': 'neural-chat'
+        },
+        'openrouter': {
+            'mistral-tiny': 'mistralai/mistral-tiny',
+            'mistral-small': 'mistralai/mistral-small',
+            'mistral-medium': 'mistralai/mistral-medium',
+            'mistral-large': 'mistralai/mistral-large-latest',
+            'mistral': 'mistralai/mistral-small',
+            'mixtral': 'mistralai/mixtral-8x7b',
+            'google/gemini-pro': 'anthropic/claude-3-haiku'
+        }
+    }
+    
     def _provider_supports_model(self, provider_name: str, model: str) -> bool:
         """
-        Check if a provider supports a model (heuristic).
+        Check if a provider supports a model using mapping and heuristics.
         
         Args:
             provider_name: Provider name
@@ -388,14 +487,26 @@ class ProviderManager:
         Returns:
             True if provider likely supports the model
         """
-        # Simple heuristic based on model name patterns
+        # First check if we have a direct mapping for this model
+        if provider_name in self.MODEL_NAME_MAPPING:
+            provider_mappings = self.MODEL_NAME_MAPPING[provider_name]
+            if model in provider_mappings:
+                return True
+        
+        # Check if this is a standard model with mappings
+        if 'standard' in self.MODEL_NAME_MAPPING:
+            standard_mappings = self.MODEL_NAME_MAPPING['standard']
+            if model in standard_mappings and provider_name in standard_mappings[model]:
+                return True
+        
+        # Fallback to heuristic based on model name patterns
         model_patterns = {
             'openai': ['gpt-', 'text-', 'davinci', 'curie', 'babbage', 'ada'],
             'anthropic': ['claude-', 'claude'],
             'google': ['gemini-', 'palm-', 'bison'],
-            'openrouter': ['openai/', 'anthropic/', 'google/', 'meta/'],
-            'ollama': ['llama', 'mistral', 'codellama', 'vicuna'],
-            'mistral': ['mistral-', 'mixtral-']
+            'openrouter': ['openai/', 'anthropic/', 'google/', 'meta/', 'mistralai/'],
+            'ollama': ['llama', 'mistral', 'codellama', 'vicuna', 'mixtral'],
+            'mistral': ['mistral-', 'mixtral-', 'open-mistral', 'open-mixtral']
         }
         
         patterns = model_patterns.get(provider_name, [])
@@ -443,6 +554,9 @@ class ProviderManager:
         if not provider:
             raise ProviderError("selection", "No available providers")
         
+        # Add provider-specific code formatting instructions if needed
+        messages = self._add_code_formatting_instructions(messages, provider)
+        
         # Try primary provider
         try:
             result = await self._generate_with_provider(provider, messages, model, config)
@@ -468,8 +582,12 @@ class ProviderManager:
                 for fallback_provider in fallback_providers:
                     try:
                         logger.info(f"Trying fallback provider: {fallback_provider}")
+                        
+                        # Add provider-specific code formatting instructions for fallback provider
+                        fallback_messages = self._add_code_formatting_instructions(messages, fallback_provider)
+                        
                         result = await self._generate_with_provider(
-                            fallback_provider, messages, model, config
+                            fallback_provider, fallback_messages, model, config
                         )
                         
                         # Cache result
@@ -540,6 +658,37 @@ class ProviderManager:
             self._provider_errors[provider] = self._provider_errors.get(provider, 0) + 1
             raise ProviderError(provider, f"Streaming generation failed: {e}")
     
+    def _map_model_to_provider(self, model: str, provider_name: str) -> str:
+        """
+        Map a model name to the appropriate name for a specific provider.
+        
+        Args:
+            model: Original model name
+            provider_name: Target provider name
+            
+        Returns:
+            Mapped model name for the provider
+        """
+        # Check provider-specific mappings
+        if provider_name in self.MODEL_NAME_MAPPING:
+            provider_mappings = self.MODEL_NAME_MAPPING[provider_name]
+            if model in provider_mappings:
+                mapped_model = provider_mappings[model]
+                logger.debug(f"Mapped model '{model}' to '{mapped_model}' for provider '{provider_name}'")
+                return mapped_model
+        
+        # Check standard model mappings
+        if 'standard' in self.MODEL_NAME_MAPPING:
+            standard_mappings = self.MODEL_NAME_MAPPING['standard']
+            if model in standard_mappings and provider_name in standard_mappings[model]:
+                mapped_model = standard_mappings[model][provider_name]
+                logger.debug(f"Mapped standard model '{model}' to '{mapped_model}' for provider '{provider_name}'")
+                return mapped_model
+        
+        # If no mapping found, return the original model name
+        logger.debug(f"No mapping found for model '{model}' with provider '{provider_name}', using as-is")
+        return model
+    
     async def _generate_with_provider(
         self,
         provider_name: str,
@@ -562,14 +711,155 @@ class ProviderManager:
         if not model:
             raise ProviderError(provider_name, "No model specified and no default model configured")
         
-        # Execute with retry logic
-        return await self.retry_manager.execute_async(
-            provider.generate_text,
-            messages,
-            model,
-            config
-        )
+        # Map the model name to the appropriate name for this provider
+        mapped_model = self._map_model_to_provider(model, provider_name)
+        
+        try:
+            # Execute with retry logic
+            return await self.retry_manager.execute_async(
+                provider.generate_text,
+                messages,
+                mapped_model,
+                config
+            )
+        except ModelNotFoundError as e:
+            # If model not found, try fallback models
+            logger.warning(f"Model '{mapped_model}' not found for provider '{provider_name}', trying fallbacks")
+            
+            # Try fallback models for this provider
+            fallback_models = self._get_fallback_models(provider_name)
+            
+            for fallback_model in fallback_models:
+                try:
+                    logger.info(f"Trying fallback model '{fallback_model}' for provider '{provider_name}'")
+                    return await self.retry_manager.execute_async(
+                        provider.generate_text,
+                        messages,
+                        fallback_model,
+                        config
+                    )
+                except ModelNotFoundError:
+                    logger.warning(f"Provider '{provider_name}': Model '{fallback_model}' not found")
+                    continue
+                except Exception as fallback_error:
+                    logger.error(f"Error with fallback model '{fallback_model}': {fallback_error}")
+                    continue
+            
+            # If all fallbacks fail, provide a more helpful error message
+            available_models_msg = ""
+            try:
+                # Try to get available models to provide a helpful error message
+                if hasattr(provider, 'get_models'):
+                    models = await provider.get_models()
+                    if models:
+                        model_names = [m.name for m in models[:5]]
+                        available_models_msg = f" Available models include: {', '.join(model_names)}"
+            except Exception:
+                pass
+                
+            raise ModelNotFoundError(
+                provider_name,
+                f"Model '{mapped_model}' and all fallbacks not found.{available_models_msg} Please check your configuration."
+            )
     
+    def _add_code_formatting_instructions(self, messages: List[Message], provider_name: str) -> List[Message]:
+        """
+        Add provider-specific code formatting instructions to the messages.
+        
+        Args:
+            messages: List of conversation messages
+            provider_name: Provider name
+            
+        Returns:
+            Updated list of messages with code formatting instructions
+        """
+        # Check if any message contains code-related keywords
+        code_related = False
+        for message in messages:
+            if message.role.value == "user" and any(keyword in message.content.lower()
+                                                   for keyword in ['code', 'script', 'python', 'nuke.', 'node', 'function']):
+                code_related = True
+                break
+        
+        if not code_related:
+            return messages
+        
+        # Create a copy of the messages to avoid modifying the original
+        updated_messages = messages.copy()
+        
+        # Common code completeness instructions
+        code_completeness_instructions = (
+            "\n\nCRITICAL INSTRUCTION: You MUST provide COMPLETE, FULLY FUNCTIONAL code that can be run as-is. "
+            "Never truncate code or provide partial implementations. Include all necessary imports, function definitions, "
+            "and execution code. Your code must handle edge cases and include proper error handling. "
+            "If you start a code block, you MUST complete it with ALL necessary implementation details. "
+            "Ensure your code runs correctly for more than just the simplest cases."
+        )
+        
+        # Add provider-specific instructions
+        if provider_name.lower() == 'mistral':
+            # Mistral needs more explicit instructions
+            system_message = None
+            for i, message in enumerate(updated_messages):
+                if message.role.value == "system":
+                    system_message = message
+                    system_content = message.content
+                    if "code formatting" not in system_content.lower():
+                        updated_content = system_content + "\n\nIMPORTANT: When providing code, ALWAYS format it within markdown code blocks using triple backticks with the language specified, like this:\n```python\n# Your code here\nimport nuke\n```" + code_completeness_instructions
+                        updated_messages[i] = Message(role=message.role, content=updated_content)
+                    elif "complete, fully functional code" not in system_content.lower():
+                        # Add completeness instructions if formatting instructions exist but completeness ones don't
+                        updated_content = system_content + code_completeness_instructions
+                        updated_messages[i] = Message(role=message.role, content=updated_content)
+                    break
+            
+            # If no system message found, add one with both formatting and completeness instructions
+            if system_message is None:
+                from .base_provider import MessageRole
+                system_msg = Message(
+                    role=MessageRole.SYSTEM,
+                    content="IMPORTANT: When providing code, ALWAYS format it within markdown code blocks using triple backticks with the language specified, like this:\n```python\n# Your code here\nimport nuke\n```" + code_completeness_instructions
+                )
+                updated_messages.insert(0, system_msg)
+                
+        elif provider_name.lower() == 'ollama':
+            # Ollama needs more explicit instructions
+            # Add a reminder at the end of the user's last message
+            for i in range(len(updated_messages) - 1, -1, -1):
+                if updated_messages[i].role.value == "user":
+                    user_content = updated_messages[i].content
+                    if "code formatting" not in user_content.lower():
+                        updated_content = user_content + "\n\nIMPORTANT: Please format any code you provide in markdown code blocks using triple backticks with 'python' language specifier, like this:\n```python\n# Example code\nimport nuke\n```" + code_completeness_instructions
+                        updated_messages[i] = Message(role=updated_messages[i].role, content=updated_content)
+                    elif "complete, fully functional code" not in user_content.lower():
+                        # Add completeness instructions if formatting instructions exist but completeness ones don't
+                        updated_content = user_content + code_completeness_instructions
+                        updated_messages[i] = Message(role=updated_messages[i].role, content=updated_content)
+                    break
+        else:
+            # For other providers, add completeness instructions to the system message if it exists
+            system_message = None
+            for i, message in enumerate(updated_messages):
+                if message.role.value == "system":
+                    system_message = message
+                    system_content = message.content
+                    if "complete, fully functional code" not in system_content.lower():
+                        updated_content = system_content + code_completeness_instructions
+                        updated_messages[i] = Message(role=message.role, content=updated_content)
+                    break
+            
+            # If no system message found, add completeness instructions to the last user message
+            if system_message is None:
+                for i in range(len(updated_messages) - 1, -1, -1):
+                    if updated_messages[i].role.value == "user":
+                        user_content = updated_messages[i].content
+                        if "complete, fully functional code" not in user_content.lower():
+                            updated_content = user_content + code_completeness_instructions
+                            updated_messages[i] = Message(role=updated_messages[i].role, content=updated_content)
+                        break
+        
+        return updated_messages
+        
     def _generate_cache_key(
         self,
         messages: List[Message],
@@ -782,23 +1072,42 @@ class ProviderManager:
             logger.error(f"Error during provider manager cleanup: {e}")
 
     async def shutdown(self):
-        """Shutdown the provider manager."""
+        """Shutdown the provider manager and clean up all resources."""
         logger.info("Shutting down provider manager...")
         
-        # Save cache
-        self.cache_manager.save()
-        
-        # Clear providers
-        self._providers.clear()
-        self._provider_status.clear()
-        
-        logger.info("Provider manager shutdown complete")
+        try:
+            # Close all provider sessions
+            for provider_name, provider in self._providers.items():
+                try:
+                    if hasattr(provider, 'close'):
+                        await provider.close()
+                    elif hasattr(provider, '__aexit__'):
+                        await provider.__aexit__(None, None, None)
+                except Exception as e:
+                    logger.warning(f"Error closing provider {provider_name}: {e}")
+            
+            # Save cache
+            if hasattr(self, 'cache_manager') and self.cache_manager:
+                self.cache_manager.save()
+            
+            # Clear providers
+            self._providers.clear()
+            self._provider_status.clear()
+            
+            logger.info("Provider manager shutdown complete")
+            
+        except Exception as e:
+            logger.error(f"Error during provider manager shutdown: {e}")
     
     def get_current_provider(self) -> Optional[str]:
         """Get the name of the current/default provider."""
         try:
             # Try to get the default provider from config
-            default_provider = getattr(self.config, 'default_provider', None)
+            if hasattr(self.config, 'get'):
+                default_provider = self.config.get('default_provider', None)
+            else:
+                default_provider = getattr(self.config, 'default_provider', None)
+                
             if default_provider and default_provider in self._providers:
                 return default_provider
             
@@ -809,12 +1118,14 @@ class ProviderManager:
             
             return None
             
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error getting current provider: {e}")
             return None
     
     def set_current_provider(self, provider_name: str):
         """Set the current provider."""
         try:
+            # Check if provider exists in available providers
             if provider_name in self._providers:
                 # Update config with new default provider
                 if hasattr(self.config, 'set'):
@@ -822,29 +1133,104 @@ class ProviderManager:
                 else:
                     # Fallback: set attribute directly
                     setattr(self.config, 'default_provider', provider_name)
+                
+                # Save config to ensure changes are persisted
+                if hasattr(self.config, 'save'):
+                    try:
+                        self.config.save()
+                        logger.info(f"Saved config with new default provider: {provider_name}")
+                    except Exception as save_error:
+                        logger.warning(f"Failed to save config: {save_error}")
+                
+                # Ensure provider is authenticated
+                if not self._provider_status.get(provider_name, ProviderStatus(
+                    name=provider_name, enabled=True, authenticated=False,
+                    available=False, last_check=datetime.now()
+                )).authenticated:
+                    # Try to authenticate asynchronously
+                    import asyncio
+                    try:
+                        # Use the event loop manager instead of creating a new loop
+                        run_coroutine(self.authenticate_provider(provider_name))
+                    except Exception as auth_error:
+                        logger.warning(f"Failed to authenticate provider {provider_name}: {auth_error}")
+                        # Continue anyway - authentication will be retried when needed
+                
                 logger.info(f"Set current provider to: {provider_name}")
+                return True
             else:
-                raise ProviderError(provider_name, "Provider not found")
+                # Provider not found in loaded providers, check if it's in available providers
+                if provider_name in self.PROVIDER_MODULES:
+                    # Try to load the provider
+                    try:
+                        self._load_provider(provider_name)
+                        # Update config with new default provider
+                        if hasattr(self.config, 'set'):
+                            self.config.set('default_provider', provider_name)
+                        else:
+                            # Fallback: set attribute directly
+                            setattr(self.config, 'default_provider', provider_name)
+                            
+                        # Save config to ensure changes are persisted
+                        if hasattr(self.config, 'save'):
+                            try:
+                                self.config.save()
+                                logger.info(f"Saved config with new default provider: {provider_name}")
+                            except Exception as save_error:
+                                logger.warning(f"Failed to save config: {save_error}")
+                                
+                        logger.info(f"Loaded and set current provider to: {provider_name}")
+                        return True
+                    except Exception as load_error:
+                        logger.error(f"Failed to load provider {provider_name}: {load_error}")
+                        raise ProviderError(provider_name, f"Provider could not be loaded: {load_error}")
+                else:
+                    raise ProviderError(provider_name, "Provider not found")
         except Exception as e:
             logger.error(f"Failed to set current provider: {e}")
             raise
+    
+    def _get_fallback_models(self, provider_name: str) -> List[str]:
+        """
+        Get a list of fallback models for a provider.
+        
+        Args:
+            provider_name: Provider name
+            
+        Returns:
+            List of fallback model names
+        """
+        fallbacks = {
+            'openai': ['gpt-3.5-turbo', 'gpt-3.5-turbo-0125', 'gpt-3.5-turbo-1106'],
+            'anthropic': ['claude-3-sonnet', 'claude-3-haiku', 'claude-instant-1.2'],
+            'google': ['gemini-pro', 'gemini-1.0-pro'],
+            'ollama': ['neural-chat', 'phi', 'mistral', 'llama2'],
+            'mistral': ['mistral-small', 'mistral-tiny', 'open-mistral-7b'],
+            'openrouter': ['anthropic/claude-3-haiku', 'openai/gpt-3.5-turbo', 'mistralai/mistral-small']
+        }
+        
+        return fallbacks.get(provider_name.lower(), [])
     
     def get_default_model(self, provider_name: str) -> str:
         """Get the default model for a provider."""
         try:
             provider_config = self.config.get_provider_config(provider_name)
-            return getattr(provider_config, 'default_model', '')
+            default_model = getattr(provider_config, 'default_model', '')
+            if default_model:
+                return default_model
         except Exception:
-            # Return a reasonable default based on provider
-            defaults = {
-                'openai': 'gpt-3.5-turbo',
-                'anthropic': 'claude-3-sonnet',
-                'google': 'gemini-pro',
-                'ollama': 'llama2',
-                'mistral': 'mistral-tiny',
-                'openrouter': 'openai/gpt-3.5-turbo'
-            }
-            return defaults.get(provider_name.lower(), '')
+            pass
+            
+        # Return a reasonable default based on provider
+        defaults = {
+            'openai': 'gpt-3.5-turbo',
+            'anthropic': 'claude-3-sonnet',
+            'google': 'gemini-pro',
+            'ollama': 'llama2',
+            'mistral': 'mistral-small',  # Changed from mistral-tiny for better reliability
+            'openrouter': 'openai/gpt-3.5-turbo'
+        }
+        return defaults.get(provider_name.lower(), '')
     
     def set_current_model(self, model_name: str):
         """Set the current model for the active provider."""
@@ -880,17 +1266,72 @@ class ProviderManager:
             from .base_provider import Message, MessageRole
             messages = [Message(role=MessageRole.USER, content=prompt)]
             
-            # Run async generation
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                response = loop.run_until_complete(
-                    self.generate_text(messages, default_model, current_provider)
-                )
-                return response.content
-            finally:
-                loop.close()
+            # Use the event loop manager to run the coroutine
+            response = run_coroutine(
+                self.generate_text(messages, default_model, current_provider),
+                timeout=120  # 2 minute timeout
+            )
+            return response.content
                 
         except Exception as e:
             logger.error(f"Failed to generate response: {e}")
             raise ProviderError("generation", f"Response generation failed: {e}")
+            
+    async def get_openrouter_providers(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Get information about all providers available through OpenRouter.
+        
+        This method retrieves detailed information about all AI providers
+        accessible through the OpenRouter API, including their models,
+        capabilities, and other metadata.
+        
+        Returns:
+            Dictionary mapping provider names to provider information
+            
+        Raises:
+            ProviderError: If OpenRouter provider is not available or authenticated
+        """
+        try:
+            # Check if OpenRouter provider is available
+            openrouter_provider = self.get_provider('openrouter')
+            if not openrouter_provider:
+                logger.warning("OpenRouter provider not available")
+                return {}
+                
+            # Ensure OpenRouter provider is authenticated
+            if not openrouter_provider._authenticated:
+                try:
+                    await self.authenticate_provider('openrouter')
+                except Exception as auth_error:
+                    logger.error(f"Failed to authenticate OpenRouter provider: {auth_error}")
+                    raise ProviderError("openrouter", f"Authentication failed: {auth_error}")
+                    
+            # Call the provider's method to get all providers
+            providers = await openrouter_provider.get_all_providers()
+            
+            logger.info(f"Retrieved {len(providers)} providers from OpenRouter")
+            return providers
+            
+        except Exception as e:
+            logger.error(f"Failed to get OpenRouter providers: {e}")
+            raise ProviderError("openrouter", f"Failed to get providers: {e}")
+            
+    def get_openrouter_providers_sync(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Synchronous wrapper for getting all providers from OpenRouter.
+        
+        Returns:
+            Dictionary mapping provider names to provider information
+            
+        Raises:
+            ProviderError: If OpenRouter provider is not available or authenticated
+        """
+        try:
+            # Use the event loop manager to run the coroutine
+            return run_coroutine(
+                self.get_openrouter_providers(),
+                timeout=60  # 1 minute timeout
+            )
+        except Exception as e:
+            logger.error(f"Failed to get OpenRouter providers: {e}")
+            raise ProviderError("openrouter", f"Failed to get providers: {e}")
